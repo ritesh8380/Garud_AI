@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "./supabaseClient";
+import AuthScreen from "./AuthScreen";
+import FormattedMessage from "./FormattedMessage";
 
 const DARK = {
   bg: "#212121", text: "#ececec", subText: "#8e8ea0", dimText: "#4a4a5a",
@@ -8,7 +11,7 @@ const DARK = {
   sendBtnDisabled: "#3a3a3a", avatarBot: "#ab68ff", hintText: "#3a3a4a",
   chipBg: "transparent", chipBorder: "#3a3a3a", chipHoverBg: "#2f2f2f",
   modalBg: "#2f2f2f", modalOverlay: "rgba(0,0,0,0.8)", scrollThumb: "#3a3a3a",
-  topbarBorder: "#2a2a2a",
+  topbarBorder: "#2a2a2a", codeBg: "#181818", codeHeadBg: "#242424",
 };
 
 const LIGHT = {
@@ -19,7 +22,7 @@ const LIGHT = {
   sendBtnDisabled: "#e5e5e5", avatarBot: "#ab68ff", hintText: "#d1d1d1",
   chipBg: "transparent", chipBorder: "#e5e5e5", chipHoverBg: "#f4f4f5",
   modalBg: "#f4f4f5", modalOverlay: "rgba(0,0,0,0.4)", scrollThumb: "#e5e5e5",
-  topbarBorder: "#f0f0f0",
+  topbarBorder: "#f0f0f0", codeBg: "#f6f6f7", codeHeadBg: "#ececee",
 };
 
 function buildCSS(t) {
@@ -28,16 +31,30 @@ function buildCSS(t) {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
     body { font-family: 'Inter', sans-serif; background: ${t.bg}; color: ${t.text}; overflow: hidden; transition: background 0.3s, color 0.3s; }
-    .shell { height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .shell { height: 100vh; display: flex; flex-direction: column; align-items: center; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
+    @keyframes shellIn { from { opacity: 0; } to { opacity: 1; } }
+    .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
+    .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
+    @keyframes pulseScale { 0%,100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.12); opacity: 1; } }
     .topbar { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid ${t.topbarBorder}; background: ${t.bg}; z-index: 10; transition: background 0.3s, border-color 0.3s; }
     .brand { display: flex; align-items: center; gap: 8px; }
-    .brand-icon { font-size: 20px; }
+    .brand-icon { font-size: 20px; display: inline-block; animation: soar 6s ease-in-out infinite; }
+    @keyframes soar { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-2px) rotate(-4deg); } }
     .brand-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 800; color: ${t.text}; letter-spacing: 0.01em; transition: color 0.3s; }
-    .topbar-right { display: flex; align-items: center; gap: 8px; }
-    .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: background 0.15s, color 0.15s; }
-    .icon-btn:hover { background: ${t.inputBg}; color: ${t.text}; }
-    .dev-btn { height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; }
-    .dev-btn:hover { background: ${t.inputBg}; color: ${t.text}; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; position: relative; }
+    .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease, border-color 0.18s ease; }
+    .icon-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
+    .icon-btn:active { transform: translateY(0) scale(0.94); }
+    .dev-btn { height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease; }
+    .dev-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
+    .dev-btn:active { transform: translateY(0) scale(0.96); }
+    .avatar-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: linear-gradient(135deg,#ab68ff,#8b3cff); color: #fff; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, box-shadow 0.2s ease; }
+    .avatar-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(171,104,255,0.35); }
+    .account-menu { position: absolute; top: 40px; right: 0; width: 220px; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; border-radius: 12px; padding: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.25); animation: menuIn 0.16s cubic-bezier(.2,.8,.3,1) both; z-index: 20; }
+    @keyframes menuIn { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .account-email { font-size: 12px; color: ${t.subText}; padding: 6px 8px 10px; word-break: break-all; border-bottom: 1px solid ${t.inputBorder}; margin-bottom: 6px; }
+    .account-signout { width: 100%; text-align: left; padding: 9px 8px; border-radius: 8px; border: none; background: transparent; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+    .account-signout:hover { background: ${t.inputBg}; }
     .conversation { flex: 1; width: 100%; max-width: 760px; overflow-y: auto; padding: 32px 24px 16px; display: flex; flex-direction: column; scroll-behavior: smooth; }
     .conversation::-webkit-scrollbar { width: 5px; }
     .conversation::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
@@ -48,27 +65,29 @@ function buildCSS(t) {
     .welcome-title { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; color: ${t.text}; margin-bottom: 10px; letter-spacing: -0.02em; transition: color 0.3s; }
     .welcome-sub { font-size: 14px; color: ${t.subText}; margin-bottom: 32px; line-height: 1.6; transition: color 0.3s; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    .chip { font-size: 13px; padding: 9px 18px; border-radius: 999px; border: 1px solid ${t.chipBorder}; background: ${t.chipBg}; color: ${t.subText}; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.15s, color 0.15s, border-color 0.15s; }
-    .chip:hover { background: ${t.chipHoverBg}; color: ${t.text}; border-color: ${t.inputHoverBorder}; }
-    .msg-block { padding: 18px 0; animation: mIn 0.2s ease both; }
-    @keyframes mIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    .chip { font-size: 13px; padding: 9px 18px; border-radius: 999px; border: 1px solid ${t.chipBorder}; background: ${t.chipBg}; color: ${t.subText}; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease; }
+    .chip:hover { background: ${t.chipHoverBg}; color: ${t.text}; border-color: ${t.inputHoverBorder}; transform: translateY(-2px); }
+    .chip:active { transform: translateY(0) scale(0.97); }
+    .msg-block { padding: 18px 0; animation: mIn 0.35s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes mIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
     .msg-block.user { display: flex; justify-content: flex-end; }
     .user-pill { max-width: 72%; background: ${t.userPillBg}; border: 1px solid ${t.userPillBorder}; border-radius: 20px; padding: 12px 18px; font-size: 15px; line-height: 1.65; color: ${t.userText}; white-space: pre-wrap; word-break: break-word; transition: background 0.3s, color 0.3s; }
     .msg-block.bot { display: flex; gap: 14px; align-items: flex-start; }
-    .bot-avatar { width: 26px; height: 26px; border-radius: 6px; background: ${t.avatarBot}18; border: 1px solid ${t.avatarBot}30; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 3px; }
-    .bot-content { flex: 1; font-size: 15px; line-height: 1.78; color: ${t.assistantText}; white-space: pre-wrap; word-break: break-word; padding-top: 1px; transition: color 0.3s; }
-    .typing-block { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0; animation: mIn 0.2s ease both; }
+    .bot-avatar { width: 26px; height: 26px; border-radius: 6px; background: ${t.avatarBot}18; border: 1px solid ${t.avatarBot}30; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 3px; animation: avatarPop 0.35s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes avatarPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .bot-content { flex: 1; font-size: 15px; line-height: 1.78; color: ${t.assistantText}; word-break: break-word; padding-top: 1px; transition: color 0.3s; min-width: 0; }
+    .typing-block { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0; animation: mIn 0.25s ease both; }
     .typing-dots { display: flex; gap: 4px; align-items: center; padding-top: 5px; }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.subText}; animation: blink 1.4s ease-in-out infinite; }
     .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
     @keyframes blink { 0%,60%,100%{opacity:.15;transform:scale(.85)} 30%{opacity:1;transform:scale(1)} }
     .input-wrapper { width: 100%; max-width: 760px; padding: 10px 24px 20px; }
-    .input-box { background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s, background 0.3s; }
-    .input-box:focus-within { border-color: ${t.inputHoverBorder}; }
+    .input-box { background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
+    .input-box:focus-within { border-color: ${t.inputHoverBorder}; box-shadow: 0 0 0 3px ${t.avatarBot}14; }
     textarea { flex: 1; background: none; border: none; outline: none; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; resize: none; min-height: 24px; max-height: 180px; overflow-y: auto; caret-color: ${t.text}; transition: color 0.3s; }
     textarea::placeholder { color: ${t.dimText}; }
-    .send-btn { width: 34px; height: 34px; border-radius: 8px; border: none; background: ${t.sendBtnBg}; color: ${t.sendBtnText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity 0.15s, transform 0.1s, background 0.3s; }
-    .send-btn:hover:not(:disabled) { opacity: 0.82; }
+    .send-btn { width: 34px; height: 34px; border-radius: 8px; border: none; background: ${t.sendBtnBg}; color: ${t.sendBtnText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity 0.15s ease, transform 0.12s ease, background 0.3s; }
+    .send-btn:hover:not(:disabled) { opacity: 0.82; transform: translateY(-1px); }
     .send-btn:active:not(:disabled) { transform: scale(0.92); }
     .send-btn:disabled { background: ${t.sendBtnDisabled}; color: ${t.subText}; cursor: not-allowed; opacity: 0.5; }
     .status-badge { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid ${t.inputBorder}; background: transparent; font-family: 'Inter', sans-serif; font-size: 12px; color: ${t.subText}; }
@@ -92,6 +111,31 @@ function buildCSS(t) {
     .insta-icon { width: 18px; height: 18px; background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
     .insta-icon svg { width: 11px; height: 11px; fill: #fff; }
     .modal-built { margin-top: 16px; font-size: 10px; color: ${t.dimText}; letter-spacing: 0.08em; }
+
+    /* Formatted (markdown-lite) AI reply content */
+    .md-body { display: flex; flex-direction: column; gap: 10px; }
+    .md-p { margin: 0; }
+    .md-h { font-family: 'Syne', sans-serif; font-weight: 800; color: ${t.text}; line-height: 1.3; margin-top: 4px; }
+    .md-h3 { font-size: 17px; }
+    .md-h4 { font-size: 16px; }
+    .md-h5 { font-size: 15px; }
+    .md-ul, .md-ol { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+    .md-ul li, .md-ol li { padding-left: 2px; }
+    .md-strong { color: ${t.text}; font-weight: 700; }
+    .md-em { font-style: italic; }
+    .md-inline-code { font-family: ui-monospace, Consolas, monospace; font-size: 0.88em; background: ${t.codeBg}; padding: 2px 6px; border-radius: 5px; color: ${t.text}; }
+    .md-link { color: ${t.avatarBot}; text-decoration: underline; text-underline-offset: 2px; }
+    .md-code-block { border: 1px solid ${t.inputBorder}; border-radius: 10px; overflow: hidden; margin: 2px 0; }
+    .md-code-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; background: ${t.codeHeadBg}; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: ${t.subText}; text-transform: lowercase; }
+    .md-copy-btn { background: transparent; border: 1px solid ${t.inputBorder}; color: ${t.subText}; font-family: 'Inter', sans-serif; font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    .md-copy-btn:hover { background: ${t.inputBg}; color: ${t.text}; }
+    .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: ${t.codeBg}; }
+    .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
+      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar { animation: none !important; transition: none !important; }
+    }
   `;
 }
 
@@ -110,8 +154,22 @@ export default function App() {
   const [isDark, setIsDark] = useState(true);
   const [showDev, setShowDev] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [session, setSession] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthChecked(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const on = () => setIsOnline(true);
@@ -155,6 +213,21 @@ export default function App() {
 
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
   const hasText = text.trim().length > 0;
+  const handleSignOut = async () => { setShowAccount(false); await supabase.auth.signOut(); setChat([]); };
+  const initial = (session?.user?.email || "?").charAt(0).toUpperCase();
+
+  if (!authChecked) {
+    return (
+      <div className="splash">
+        <style>{buildCSS(t)}</style>
+        <span className="splash-eagle">🦅</span>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen t={t} isDark={isDark} onToggleTheme={() => setIsDark(d => !d)} />;
+  }
 
   return (
     <>
@@ -192,6 +265,13 @@ export default function App() {
             </div>
             <button className="icon-btn" onClick={() => setIsDark(d => !d)}>{isDark ? "☀️" : "🌙"}</button>
             <button className="dev-btn" onClick={() => setShowDev(true)}>Developer</button>
+            <button className="avatar-btn" onClick={() => setShowAccount(v => !v)}>{initial}</button>
+            {showAccount && (
+              <div className="account-menu" onMouseLeave={() => setShowAccount(false)}>
+                <div className="account-email">{session.user.email}</div>
+                <button className="account-signout" onClick={handleSignOut}>Sign out</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -208,13 +288,13 @@ export default function App() {
           )}
 
           {chat.map((m, i) => (
-            <div key={i} className={`msg-block ${m.type}`}>
+            <div key={i} className={`msg-block ${m.type}`} style={{ animationDelay: `${Math.min(i, 4) * 0.03}s` }}>
               {m.type === "user" ? (
                 <div className="user-pill">{m.text}</div>
               ) : (
                 <>
                   <div className="bot-avatar">🦅</div>
-                  <div className="bot-content">{m.text}</div>
+                  <div className="bot-content"><FormattedMessage text={m.text} /></div>
                 </>
               )}
             </div>
