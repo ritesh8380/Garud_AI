@@ -198,15 +198,11 @@ export default function App() {
     try {
       const res = await fetch("https://garud-ai.onrender.com/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg }),
       });
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
-      setChat(p => [...p, { type: "bot", text: data.reply ?? "Sorry, I didn't get a valid response." }]);
+      setChat(p => [...p, { type: "bot", text: data.reply }]);
     } catch {
       setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
