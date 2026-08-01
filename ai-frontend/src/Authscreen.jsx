@@ -190,5 +190,5 @@ export default function AuthScreen({ t, isDark, onToggleTheme }) {
         </div>
       </div>
     </div>
-  );
+  );t
 }
