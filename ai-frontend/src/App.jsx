@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { supabase } from "./supabaseClient";
-import AuthScreen from "./AuthScreen";
+import { supabase } from "./database";
+import AuthScreen from "./Authscreen";
 import FormattedMessage from "./FormattedMessage";
 
 const DARK = {
