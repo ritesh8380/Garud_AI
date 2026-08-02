@@ -150,11 +150,22 @@ function buildCSS(t) {
     .mode-option:hover .mode-option-tip { opacity: 1; }
     .mode-stack { position: relative; width: 34px; height: 34px; cursor: pointer; }
     .mode-stack-circle { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .mode-stack-circle.back { transform: translate(4px, 4px) scale(0.9); opacity: 0.65; }
+    .mode-stack-circle.back { transform: translate(4px, 4px) scale(0.9); opacity: 0.5; font-size: 13px; }
     .mode-stack-circle.front { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 2px 8px rgba(0,0,0,0.2); }
     .mode-stack:hover .mode-stack-circle.front { transform: translateY(-2px); }
     .mode-stack.open .mode-stack-circle.front { transform: scale(0); opacity: 0; }
     .mode-stack.open .mode-stack-circle.back { transform: scale(0); opacity: 0; }
+
+    .attach-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease; }
+    .attach-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
+    .attach-btn:active { transform: translateY(0) scale(0.94); }
+    .file-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px 8px; }
+    .file-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 8px 5px 10px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: ${t.inputBg}; color: ${t.text}; max-width: 220px; }
+    .file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-chip-remove { border: none; background: transparent; color: ${t.subText}; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; flex-shrink: 0; }
+    .file-chip-remove:hover { color: ${t.text}; }
+    .msg-file-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+    .msg-file-chip { font-size: 11px; padding: 4px 9px; border-radius: 7px; background: rgba(255,255,255,0.12); color: ${t.userText}; }
 
     @media (prefers-reduced-motion: reduce) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
@@ -206,6 +217,7 @@ const CHIPS = ["Who are you?", "What can you help with?", "Tell me something int
 const MODES = [
   { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
   { id: "love", label: "Love Mode", icon: "❤️", glow: "#ff4f81" },
+  { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
 ];
 
 export default function App() {
@@ -221,9 +233,11 @@ export default function App() {
   const [speakingIndex, setSpeakingIndex] = useState(null);
   const [mode, setMode] = useState("education");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -263,11 +277,37 @@ export default function App() {
     el.style.height = Math.min(el.scrollHeight, 180) + "px";
   }, [text]);
 
+  const MAX_FILE_SIZE = 200 * 1024; // 200KB per file — keeps requests within reasonable LLM token limits
+
+  const readFileAsText = (file) => new Promise((resolve) => {
+    if (file.size > MAX_FILE_SIZE) {
+      resolve({ name: file.name, content: `[File too large to include — ${(file.size / 1024).toFixed(0)}KB, limit is 200KB]` });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, content: reader.result });
+    reader.onerror = () => resolve({ name: file.name, content: "[Could not read this file]" });
+    reader.readAsText(file);
+  });
+
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const results = await Promise.all(files.map(readFileAsText));
+    setAttachedFiles(prev => [...prev, ...results]);
+    e.target.value = ""; // allow re-selecting the same file later
+  };
+
+  const removeFile = (idx) => setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+
   const send = async (msgOverride) => {
     const msg = (msgOverride || text).trim();
-    if (!msg || loading) return;
-    setChat(p => [...p, { type: "user", text: msg }]);
+    const filesToSend = attachedFiles;
+    if (!msg && filesToSend.length === 0) return;
+    if (loading) return;
+    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name) }]);
     setText("");
+    setAttachedFiles([]);
     setLoading(true);
     try {
       const res = await fetch("https://garud-ai.onrender.com/chat", {
@@ -276,7 +316,11 @@ export default function App() {
           "Content-Type": "application/json",
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ message: msg, mode }),
+        body: JSON.stringify({
+          message: msg,
+          mode,
+          files: filesToSend.map(f => ({ name: f.name, content: f.content })),
+        }),
       });
       if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
@@ -326,7 +370,7 @@ export default function App() {
   };
 
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
-  const hasText = text.trim().length > 0;
+  const hasText = text.trim().length > 0 || attachedFiles.length > 0;
   const handleSignOut = async () => { setShowAccount(false); window.speechSynthesis?.cancel(); setSpeakingIndex(null); await supabase.auth.signOut(); setChat([]); };
   const initial = (session?.user?.email || "?").charAt(0).toUpperCase();
 
@@ -404,7 +448,14 @@ export default function App() {
           {chat.map((m, i) => (
             <div key={i} className={`msg-block ${m.type}`} style={{ animationDelay: `${Math.min(i, 4) * 0.03}s` }}>
               {m.type === "user" ? (
-                <div className="user-pill">{m.text}</div>
+                <div className="user-pill">
+                  {m.text}
+                  {m.files?.length > 0 && (
+                    <div className="msg-file-chips">
+                      {m.files.map((fn, fi) => <span key={fi} className="msg-file-chip">📄 {fn}</span>)}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <>
                   <div className="bot-avatar">🦅</div>
@@ -436,6 +487,16 @@ export default function App() {
         </div>
 
         <div className="input-wrapper">
+          {attachedFiles.length > 0 && (
+            <div className="file-chips">
+              {attachedFiles.map((f, i) => (
+                <div key={i} className="file-chip">
+                  <span className="file-chip-name">📄 {f.name}</span>
+                  <button type="button" className="file-chip-remove" onClick={() => removeFile(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="input-box">
             <div className="mode-fab" ref={modeRef}>
               {modeMenuOpen && (
@@ -472,11 +533,31 @@ export default function App() {
                 </div>
               </div>
             </div>
+            {mode === "developer" && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".js,.jsx,.ts,.tsx,.py,.html,.css,.json,.md,.txt,.java,.c,.cpp,.go,.rb,.php,.sql,.yaml,.yml"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+                <button
+                  type="button"
+                  className="attach-btn"
+                  title="Attach code files for review"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  📎
+                </button>
+              </>
+            )}
             <textarea
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Message Garuda AI"
+              placeholder={mode === "developer" ? "Paste code or attach files to review…" : "Message Garuda AI"}
               disabled={loading} autoFocus
             />
             <button className="send-btn" onClick={() => send()} disabled={!hasText || loading}>
