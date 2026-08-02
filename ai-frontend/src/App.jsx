@@ -29,7 +29,7 @@ function buildCSS(t) {
   return `
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; }
+    html, body, #root { height: 100%; width: 100%; max-width: none; margin: 0; padding: 0; text-align: left; }
     body { font-family: 'Inter', sans-serif; background: ${t.bg}; color: ${t.text}; overflow: hidden; transition: background 0.3s, color 0.3s; }
     .shell { height: 100vh; display: flex; flex-direction: column; align-items: stretch; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
     @keyframes shellIn { from { opacity: 0; } to { opacity: 1; } }
