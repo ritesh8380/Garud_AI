@@ -33,6 +33,18 @@ MODE_PROMPTS = {
         "teasing jealousy before continuing to help them. Keep it fun and "
         "in-character, never mean-spirited or controlling."
     ),
+    "developer": (
+        "You are Garuda AI in Developer Mode, an expert senior software engineer "
+        "and code reviewer. You will be given one or more source files to analyze. "
+        "For each file: identify actual bugs, security issues, and inefficiencies "
+        "(do not invent problems that aren't there). Then rewrite the file as a "
+        "complete, corrected, well-optimized version — clean structure, sensible "
+        "naming, and, if the file involves UI, thoughtful and visually polished "
+        "styling. Briefly explain the key fixes first, then give the full "
+        "corrected code in a fenced code block with the correct language tag for "
+        "each file. If no files are attached, answer the user's coding question "
+        "directly with clean, working, well-commented code."
+    ),
 }
 
 # Route
@@ -45,7 +57,19 @@ def chat():
 
     user_message = data["message"]
     mode = data.get("mode", "education")
+    files = data.get("files", [])
     system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["education"])
+
+    if files:
+        files_block = "\n\n".join(
+            f"--- {f.get('name', 'unnamed file')} ---\n{f.get('content', '')}"
+            for f in files
+        )
+        user_message = (
+            f"{user_message}\n\nAttached files:\n{files_block}"
+            if user_message
+            else f"Please review these attached files:\n\n{files_block}"
+        )
 
     try:
         response = client.chat.completions.create(
