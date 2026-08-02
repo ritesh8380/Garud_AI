@@ -76,6 +76,11 @@ function buildCSS(t) {
     .bot-avatar { width: 26px; height: 26px; border-radius: 6px; background: ${t.avatarBot}18; border: 1px solid ${t.avatarBot}30; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 3px; animation: avatarPop 0.35s cubic-bezier(.34,1.56,.64,1) both; }
     @keyframes avatarPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .bot-content { flex: 1; font-size: 15px; line-height: 1.78; color: ${t.assistantText}; word-break: break-word; padding-top: 1px; transition: color 0.3s; min-width: 0; }
+    .bot-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .speak-btn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease; align-self: flex-start; }
+    .speak-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
+    .speak-btn:active { transform: translateY(0) scale(0.94); }
+    .speak-btn.speaking { color: ${t.avatarBot}; border-color: ${t.avatarBot}55; background: ${t.avatarBot}14; }
     .typing-block { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0; animation: mIn 0.25s ease both; }
     .typing-dots { display: flex; gap: 4px; align-items: center; padding-top: 5px; }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.subText}; animation: blink 1.4s ease-in-out infinite; }
@@ -145,6 +150,38 @@ const SendIcon = () => (
   </svg>
 );
 
+const SpeakerIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+    <path d="M16.5 12c0-1.77-.77-3.29-2-4.24v8.48c1.23-.95 2-2.47 2-4.24z" opacity="0.9"/>
+    <path d="M14.5 3.23v2.06c2.89 1.15 5 4.14 5 7.71s-2.11 6.56-5 7.71v2.06c4.01-1.24 7-5.06 7-9.77s-2.99-8.53-7-9.77z" opacity="0.6"/>
+  </svg>
+);
+
+const StopIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6" y="6" width="12" height="12" rx="2"/>
+  </svg>
+);
+
+// Strips markdown syntax so the speech engine reads clean prose instead of
+// literal asterisks, backticks, hashes, and bullet markers.
+function stripMarkdownForSpeech(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, " code block. ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\[(.+?)\]\((.+?)\)/g, "$1")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ")
+    .trim();
+}
+
 const CHIPS = ["Who are you?", "What can you help with?", "Tell me something interesting", "Help me write something"];
 
 export default function App() {
@@ -157,6 +194,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [speakingIndex, setSpeakingIndex] = useState(null);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -215,9 +253,30 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    return () => { window.speechSynthesis?.cancel(); };
+  }, []);
+
+  const toggleSpeak = (index, rawText) => {
+    if (!("speechSynthesis" in window)) return;
+    if (speakingIndex === index) {
+      window.speechSynthesis.cancel();
+      setSpeakingIndex(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(rawText));
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = () => setSpeakingIndex(null);
+    utterance.onerror = () => setSpeakingIndex(null);
+    window.speechSynthesis.speak(utterance);
+    setSpeakingIndex(index);
+  };
+
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
   const hasText = text.trim().length > 0;
-  const handleSignOut = async () => { setShowAccount(false); await supabase.auth.signOut(); setChat([]); };
+  const handleSignOut = async () => { setShowAccount(false); window.speechSynthesis?.cancel(); setSpeakingIndex(null); await supabase.auth.signOut(); setChat([]); };
   const initial = (session?.user?.email || "?").charAt(0).toUpperCase();
 
   if (!authChecked) {
@@ -298,7 +357,17 @@ export default function App() {
               ) : (
                 <>
                   <div className="bot-avatar">🦅</div>
-                  <div className="bot-content"><FormattedMessage text={m.text} /></div>
+                  <div className="bot-wrap">
+                    <div className="bot-content"><FormattedMessage text={m.text} /></div>
+                    <button
+                      className={`speak-btn ${speakingIndex === i ? "speaking" : ""}`}
+                      onClick={() => toggleSpeak(i, m.text)}
+                      title={speakingIndex === i ? "Stop reading" : "Read aloud"}
+                      type="button"
+                    >
+                      {speakingIndex === i ? <StopIcon /> : <SpeakerIcon />}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
