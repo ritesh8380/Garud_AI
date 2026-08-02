@@ -1,7 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { supabase } from "./database";
+import {
+  supabase,
+  listConversations,
+  createConversation,
+  toggleConversationStar,
+  deleteConversation,
+  listMessages,
+  saveMessage,
+} from "./database";
 import AuthScreen from "./Authscreen";
 import FormattedMessage from "./FormattedMessage";
+import Sidebar from "./Sidebar";
 
 const DARK = {
   bg: "#212121", text: "#ececec", subText: "#8e8ea0", dimText: "#4a4a5a",
@@ -31,8 +40,40 @@ function buildCSS(t) {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; width: 100%; max-width: none; margin: 0; padding: 0; text-align: left; }
     body { font-family: 'Inter', sans-serif; background: ${t.bg}; color: ${t.text}; overflow: hidden; transition: background 0.3s, color 0.3s; }
-    .shell { height: 100vh; display: flex; flex-direction: column; align-items: stretch; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
+    .app-layout { height: 100vh; width: 100%; display: flex; overflow: hidden; }
+    .shell { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: stretch; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
     @keyframes shellIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Sidebar: saved conversations, star badge/filter at top, per-item actions */
+    .sidebar { width: 260px; flex-shrink: 0; height: 100%; background: ${t.bg}; border-right: 1px solid ${t.topbarBorder}; display: flex; flex-direction: column; transition: margin-left 0.25s ease, background 0.3s, border-color 0.3s; }
+    .sidebar.closed { margin-left: -260px; }
+    .sidebar-top { display: flex; align-items: center; gap: 8px; padding: 14px 12px; border-bottom: 1px solid ${t.topbarBorder}; }
+    .sidebar-new { flex: 1; height: 36px; border-radius: 10px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s ease, transform 0.12s ease; }
+    .sidebar-new:hover { background: ${t.inputBg}; }
+    .sidebar-new:active { transform: scale(0.97); }
+    .sidebar-star-badge { position: relative; width: 36px; height: 36px; border-radius: 10px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+    .sidebar-star-badge:hover { background: ${t.inputBg}; color: ${t.text}; }
+    .sidebar-star-badge.active { color: #f5b942; border-color: rgba(245,185,66,0.4); background: rgba(245,185,66,0.12); }
+    .star-count { position: absolute; top: -5px; right: -5px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; background: #f5b942; color: #1a1200; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; line-height: 1; }
+    .sidebar-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+    .sidebar-list::-webkit-scrollbar { width: 5px; }
+    .sidebar-list::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+    .sidebar-empty { text-align: center; font-size: 12px; color: ${t.subText}; padding: 24px 12px; }
+    .sidebar-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; color: ${t.subText}; transition: background 0.15s ease, color 0.15s ease; }
+    .sidebar-item:hover { background: ${t.inputBg}; color: ${t.text}; }
+    .sidebar-item.active { background: ${t.chipHoverBg}; color: ${t.text}; }
+    .sidebar-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .sidebar-item-actions { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity 0.15s ease; }
+    .sidebar-item:hover .sidebar-item-actions, .sidebar-item.active .sidebar-item-actions { opacity: 1; }
+    .sidebar-icon-btn { width: 22px; height: 22px; border-radius: 6px; border: none; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; }
+    .sidebar-icon-btn:hover { background: ${t.chipHoverBg}; color: ${t.text}; }
+    .sidebar-icon-btn.starred { color: #f5b942; }
+    .sidebar-note { padding: 10px 14px; font-size: 10.5px; color: ${t.dimText}; text-align: center; border-top: 1px solid ${t.topbarBorder}; letter-spacing: 0.02em; }
+    .sidebar-toggle-btn { display: none; }
+    @media (max-width: 860px) {
+      .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); }
+      .sidebar-toggle-btn { display: flex; }
+    }
     .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
     .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
     @keyframes pulseScale { 0%,100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.12); opacity: 1; } }
@@ -234,6 +275,11 @@ export default function App() {
   const [mode, setMode] = useState("education");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [convLoading, setConvLoading] = useState(false);
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
@@ -258,6 +304,13 @@ export default function App() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
   const t = isDark ? DARK : LIGHT;
+
+  // Load the signed-in user's saved conversations for the sidebar. Doesn't
+  // fire until session exists, and clears out again on sign-out below.
+  useEffect(() => {
+    if (!session) return;
+    listConversations().then(setConversations).catch(() => {});
+  }, [session]);
 
   useEffect(() => {
     if (!modeMenuOpen) return;
@@ -300,15 +353,83 @@ export default function App() {
 
   const removeFile = (idx) => setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
 
+  // Blank the working chat and detach from any saved conversation — the
+  // next message sent will create a fresh row in `conversations`.
+  const startNewChat = () => {
+    setActiveConversationId(null);
+    setChat([]);
+    setText("");
+    setAttachedFiles([]);
+    setSpeakingIndex(null);
+    window.speechSynthesis?.cancel();
+  };
+
+  // Pull a saved conversation's messages down from Supabase and swap them
+  // into the working chat view.
+  const openConversation = async (conv) => {
+    if (loading) return;
+    setActiveConversationId(conv.id);
+    setMode(conv.mode || "education");
+    setSpeakingIndex(null);
+    window.speechSynthesis?.cancel();
+    setConvLoading(true);
+    try {
+      const msgs = await listMessages(conv.id);
+      setChat(msgs.map(m => ({ type: m.type, text: m.text, files: m.files || [] })));
+    } catch {
+      setChat([]);
+    } finally {
+      setConvLoading(false);
+    }
+  };
+
+  const handleToggleStar = async (conv) => {
+    const next = !conv.starred;
+    setConversations(prev => prev.map(c => (c.id === conv.id ? { ...c, starred: next } : c)));
+    try {
+      await toggleConversationStar(conv.id, next);
+    } catch {
+      setConversations(prev => prev.map(c => (c.id === conv.id ? { ...c, starred: !next } : c)));
+    }
+  };
+
+  const handleDeleteConversation = async (conv) => {
+    setConversations(prev => prev.filter(c => c.id !== conv.id));
+    if (activeConversationId === conv.id) startNewChat();
+    try {
+      await deleteConversation(conv.id);
+    } catch {
+      // If the delete failed server-side, the next conversation list reload will restore it.
+    }
+  };
+
   const send = async (msgOverride) => {
     const msg = (msgOverride || text).trim();
     const filesToSend = attachedFiles;
     if (!msg && filesToSend.length === 0) return;
     if (loading) return;
+
+    // Lazily create the saved conversation on first send, so browsing the
+    // welcome screen never litters the sidebar with empty chats.
+    let convId = activeConversationId;
+    if (!convId) {
+      try {
+        const title = msg ? msg.slice(0, 60) : `Review: ${filesToSend[0]?.name || "files"}`;
+        const conv = await createConversation(title, mode);
+        convId = conv.id;
+        setActiveConversationId(convId);
+        setConversations(prev => [conv, ...prev]);
+      } catch {
+        // Persisting failed — fall through and keep the chat working in-memory only.
+      }
+    }
+
     setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name) }]);
     setText("");
     setAttachedFiles([]);
     setLoading(true);
+    if (convId) saveMessage(convId, "user", msg, filesToSend.map(f => f.name)).catch(() => {});
+
     try {
       const res = await fetch("https://garud-ai.onrender.com/chat", {
         method: "POST",
@@ -324,7 +445,16 @@ export default function App() {
       });
       if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
-      setChat(p => [...p, { type: "bot", text: data.reply ?? "Sorry, I didn't get a valid response." }]);
+      const replyText = data.reply ?? "Sorry, I didn't get a valid response.";
+      setChat(p => [...p, { type: "bot", text: replyText }]);
+      if (convId) {
+        saveMessage(convId, "bot", replyText).catch(() => {});
+        setConversations(prev => {
+          const now = new Date().toISOString();
+          const updated = prev.map(c => (c.id === convId ? { ...c, last_message_at: now } : c));
+          return updated.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+        });
+      }
     } catch {
       setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
@@ -371,7 +501,16 @@ export default function App() {
 
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
   const hasText = text.trim().length > 0 || attachedFiles.length > 0;
-  const handleSignOut = async () => { setShowAccount(false); window.speechSynthesis?.cancel(); setSpeakingIndex(null); await supabase.auth.signOut(); setChat([]); };
+  const handleSignOut = async () => {
+    setShowAccount(false);
+    window.speechSynthesis?.cancel();
+    setSpeakingIndex(null);
+    await supabase.auth.signOut();
+    setChat([]);
+    setConversations([]);
+    setActiveConversationId(null);
+    setShowStarredOnly(false);
+  };
   const initial = (session?.user?.email || "?").charAt(0).toUpperCase();
 
   if (!authChecked) {
@@ -410,9 +549,23 @@ export default function App() {
         </div>
       )}
 
-      <div className="shell">
+      <div className="app-layout">
+        <Sidebar
+          t={t}
+          conversations={conversations}
+          activeId={activeConversationId}
+          onSelect={openConversation}
+          onNew={startNewChat}
+          onToggleStar={handleToggleStar}
+          onDelete={handleDeleteConversation}
+          showStarredOnly={showStarredOnly}
+          onToggleStarredFilter={() => setShowStarredOnly(v => !v)}
+          open={sidebarOpen}
+        />
+        <div className="shell">
         <div className="topbar">
           <div className="brand">
+            <button className="icon-btn sidebar-toggle-btn" onClick={() => setSidebarOpen(v => !v)} title="Toggle sidebar" type="button">☰</button>
             <span className="brand-icon">🦅</span>
             <span className="brand-name">Garuda AI</span>
           </div>
@@ -434,7 +587,13 @@ export default function App() {
         </div>
 
         <div className="conversation">
-          {chat.length === 0 && (
+          {convLoading && (
+            <div className="welcome">
+              <span className="welcome-eagle">🦅</span>
+              <div className="welcome-sub">Loading conversation…</div>
+            </div>
+          )}
+          {!convLoading && chat.length === 0 && (
             <div className="welcome">
               <span className="welcome-eagle">🦅</span>
               <div className="welcome-title">What can I help with?</div>
@@ -565,6 +724,7 @@ export default function App() {
             </button>
           </div>
           <div className="hint">Garuda AI · garud-ai.onrender.com · Shift+Enter for new line</div>
+        </div>
         </div>
       </div>
     </>
