@@ -31,7 +31,7 @@ function buildCSS(t) {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
     body { font-family: 'Inter', sans-serif; background: ${t.bg}; color: ${t.text}; overflow: hidden; transition: background 0.3s, color 0.3s; }
-    .shell { height: 100vh; display: flex; flex-direction: column; align-items: center; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
+    .shell { height: 100vh; display: flex; flex-direction: column; align-items: stretch; animation: shellIn 0.4s cubic-bezier(.2,.8,.3,1) both; }
     @keyframes shellIn { from { opacity: 0; } to { opacity: 1; } }
     .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
     .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
@@ -55,7 +55,7 @@ function buildCSS(t) {
     .account-email { font-size: 12px; color: ${t.subText}; padding: 6px 8px 10px; word-break: break-all; border-bottom: 1px solid ${t.inputBorder}; margin-bottom: 6px; }
     .account-signout { width: 100%; text-align: left; padding: 9px 8px; border-radius: 8px; border: none; background: transparent; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 13px; cursor: pointer; transition: background 0.15s; }
     .account-signout:hover { background: ${t.inputBg}; }
-    .conversation { flex: 1; width: 100%; max-width: 760px; overflow-y: auto; padding: 32px 24px 16px; display: flex; flex-direction: column; scroll-behavior: smooth; }
+    .conversation { flex: 1; width: 100%; overflow-y: auto; padding: 32px 24px 16px; display: flex; flex-direction: column; scroll-behavior: smooth; }
     .conversation::-webkit-scrollbar { width: 5px; }
     .conversation::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
     .welcome { margin: auto; text-align: center; padding: 20px 16px; animation: wIn 0.5s cubic-bezier(.2,.8,.3,1) both; }
@@ -81,7 +81,7 @@ function buildCSS(t) {
     .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.subText}; animation: blink 1.4s ease-in-out infinite; }
     .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
     @keyframes blink { 0%,60%,100%{opacity:.15;transform:scale(.85)} 30%{opacity:1;transform:scale(1)} }
-    .input-wrapper { width: 100%; max-width: 760px; padding: 10px 24px 20px; }
+    .input-wrapper { width: 100%; padding: 10px 24px 20px; }
     .input-box { background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
     .input-box:focus-within { border-color: ${t.inputHoverBorder}; box-shadow: 0 0 0 3px ${t.avatarBot}14; }
     textarea { flex: 1; background: none; border: none; outline: none; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; resize: none; min-height: 24px; max-height: 180px; overflow-y: auto; caret-color: ${t.text}; transition: color 0.3s; }
@@ -198,11 +198,15 @@ export default function App() {
     try {
       const res = await fetch("https://garud-ai.onrender.com/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ message: msg }),
       });
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
-      setChat(p => [...p, { type: "bot", text: data.reply }]);
+      setChat(p => [...p, { type: "bot", text: data.reply ?? "Sorry, I didn't get a valid response." }]);
     } catch {
       setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
