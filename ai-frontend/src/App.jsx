@@ -137,9 +137,28 @@ function buildCSS(t) {
     .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: ${t.codeBg}; }
     .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre; }
 
+    /* Mode switcher: stacked FAB that pops into Love / Education mode choices */
+    .mode-fab { position: fixed; left: 20px; bottom: 96px; z-index: 40; }
+    .mode-options { position: absolute; bottom: 56px; left: 0; display: flex; flex-direction: column-reverse; gap: 10px; }
+    .mode-option { position: relative; width: 46px; height: 46px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; color: ${t.text}; font-size: 19px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both; transition: transform 0.15s ease, box-shadow 0.2s ease; }
+    .mode-option:hover { transform: translateY(-2px) scale(1.06); }
+    .mode-option:active { transform: translateY(0) scale(0.94); }
+    .mode-option.active { box-shadow: 0 0 0 3px var(--glow), 0 0 14px var(--glow), 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both, modeGlow 2.2s ease-in-out infinite; }
+    @keyframes modePop { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
+    @keyframes modeGlow { 0%,100% { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } 50% { box-shadow: 0 0 0 3px var(--glow), 0 0 22px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } }
+    .mode-option-tip { position: absolute; left: 56px; top: 50%; transform: translateY(-50%); font-size: 11px; white-space: nowrap; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; padding: 4px 9px; border-radius: 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+    .mode-option:hover .mode-option-tip { opacity: 1; }
+    .mode-stack { position: relative; width: 46px; height: 46px; cursor: pointer; }
+    .mode-stack-circle { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 19px; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; box-shadow: 0 6px 18px rgba(0,0,0,0.28); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .mode-stack-circle.back { transform: translate(5px, 5px) scale(0.9); opacity: 0.65; }
+    .mode-stack-circle.front { box-shadow: 0 0 0 3px var(--glow), 0 0 12px var(--glow), 0 6px 18px rgba(0,0,0,0.28); }
+    .mode-stack:hover .mode-stack-circle.front { transform: translateY(-2px); }
+    .mode-stack.open .mode-stack-circle.front { transform: scale(0); opacity: 0; }
+    .mode-stack.open .mode-stack-circle.back { transform: scale(0); opacity: 0; }
+
     @media (prefers-reduced-motion: reduce) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
-      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar { animation: none !important; transition: none !important; }
+      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-option, .mode-stack-circle { animation: none !important; transition: none !important; }
     }
   `;
 }
@@ -184,6 +203,11 @@ function stripMarkdownForSpeech(text) {
 
 const CHIPS = ["Who are you?", "What can you help with?", "Tell me something interesting", "Help me write something"];
 
+const MODES = [
+  { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
+  { id: "love", label: "Love Mode", icon: "❤️", glow: "#ff4f81" },
+];
+
 export default function App() {
   const [text, setText] = useState("");
   const [chat, setChat] = useState([]);
@@ -195,8 +219,11 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [mode, setMode] = useState("education");
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+  const modeRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -217,6 +244,15 @@ export default function App() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
   const t = isDark ? DARK : LIGHT;
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const onDocClick = (e) => {
+      if (modeRef.current && !modeRef.current.contains(e.target)) setModeMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [modeMenuOpen]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat, loading]);
 
@@ -240,7 +276,7 @@ export default function App() {
           "Content-Type": "application/json",
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, mode }),
       });
       if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
@@ -350,6 +386,42 @@ export default function App() {
                 <button className="account-signout" onClick={handleSignOut}>Sign out</button>
               </div>
             )}
+          </div>
+        </div>
+
+        <div className="mode-fab" ref={modeRef}>
+          {modeMenuOpen && (
+            <div className="mode-options">
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`mode-option ${mode === m.id ? "active" : ""}`}
+                  style={{ "--glow": m.glow }}
+                  onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
+                >
+                  {m.icon}
+                  <span className="mode-option-tip">{m.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div
+            className={`mode-stack ${modeMenuOpen ? "open" : ""}`}
+            onClick={() => setModeMenuOpen(v => !v)}
+          >
+            <div
+              className="mode-stack-circle back"
+              style={{ "--glow": (MODES.find(m => m.id !== mode) || MODES[0]).glow }}
+            >
+              {(MODES.find(m => m.id !== mode) || MODES[0]).icon}
+            </div>
+            <div
+              className="mode-stack-circle front"
+              style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
+            >
+              {(MODES.find(m => m.id === mode) || MODES[0]).icon}
+            </div>
           </div>
         </div>
 
