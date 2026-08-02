@@ -132,9 +132,10 @@ export default function FormattedMessage({ text }) {
         flushPara(key);
         flushList(`list-${key}`);
         const level = heading[1].length;
-        const HTag = `h${level + 2 > 6 ? 6 : level + 2}`; // h1/h2/h3 md -> h3/h4/h5 visually
+        const visualLevel = level + 2 > 6 ? 6 : level + 2; // h1/h2/h3 md -> h3/h4/h5 visually
+        const HTag = `h${visualLevel}`;
         blocks.push(
-          <HTag key={`h-${key}`} className={`md-h md-h${level}`}>
+          <HTag key={`h-${key}`} className={`md-h md-h${visualLevel}`}>
             {renderInline(heading[2], `h-${key}`)}
           </HTag>
         );
