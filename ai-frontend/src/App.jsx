@@ -258,20 +258,35 @@ export default function App() {
   }, []);
 
   const toggleSpeak = (index, rawText) => {
-    if (!("speechSynthesis" in window)) return;
+    if (!("speechSynthesis" in window)) {
+      alert("Text-to-speech isn't supported in this browser.");
+      return;
+    }
+    const synth = window.speechSynthesis;
     if (speakingIndex === index) {
-      window.speechSynthesis.cancel();
+      synth.cancel();
       setSpeakingIndex(null);
       return;
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(rawText));
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.onend = () => setSpeakingIndex(null);
-    utterance.onerror = () => setSpeakingIndex(null);
-    window.speechSynthesis.speak(utterance);
-    setSpeakingIndex(index);
+    synth.cancel();
+    // Chrome silently drops speak() if called in the same tick as cancel();
+    // a short delay avoids that race condition.
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(stripMarkdownForSpeech(rawText));
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      synth.speak(utterance);
+      setSpeakingIndex(index);
+
+      // Chrome bug: long utterances silently pause after ~14s unless nudged.
+      const keepAlive = setInterval(() => {
+        if (!synth.speaking) { clearInterval(keepAlive); return; }
+        synth.pause();
+        synth.resume();
+      }, 10000);
+      utterance.onend = () => { clearInterval(keepAlive); setSpeakingIndex(null); };
+      utterance.onerror = () => { clearInterval(keepAlive); setSpeakingIndex(null); };
+    }, 60);
   };
 
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
