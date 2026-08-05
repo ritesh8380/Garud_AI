@@ -132,7 +132,7 @@ function buildCSS(t) {
     .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
     @keyframes blink { 0%,60%,100%{opacity:.15;transform:scale(.85)} 30%{opacity:1;transform:scale(1)} }
     .input-wrapper { width: 100%; padding: 10px 24px 20px; }
-    .input-box { background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
+    .input-box { position: relative; background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
     .input-box:focus-within { border-color: ${t.inputHoverBorder}; box-shadow: 0 0 0 3px ${t.avatarBot}14; }
     textarea { flex: 1; background: none; border: none; outline: none; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; resize: none; min-height: 24px; max-height: 180px; overflow-y: auto; caret-color: ${t.text}; transition: color 0.3s; }
     textarea::placeholder { color: ${t.dimText}; }
@@ -190,24 +190,25 @@ function buildCSS(t) {
     .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: ${t.codeBg}; }
     .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre; }
 
-    /* Mode switcher: stacked toggle embedded in the message input row */
-    .mode-fab { position: relative; flex-shrink: 0; }
-    .mode-options { position: absolute; bottom: 44px; left: 0; display: flex; flex-direction: column-reverse; gap: 8px; z-index: 5; }
-    .mode-option { position: relative; width: 34px; height: 34px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; color: ${t.text}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both; transition: transform 0.15s ease, box-shadow 0.2s ease; }
-    .mode-option:hover { transform: translateY(-2px) scale(1.06); }
-    .mode-option:active { transform: translateY(0) scale(0.94); }
-    .mode-option.active { box-shadow: 0 0 0 3px var(--glow), 0 0 14px var(--glow), 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both, modeGlow 2.2s ease-in-out infinite; }
-    @keyframes modePop { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
-    @keyframes modeGlow { 0%,100% { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } 50% { box-shadow: 0 0 0 3px var(--glow), 0 0 22px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } }
-    .mode-option-tip { position: absolute; left: 42px; top: 50%; transform: translateY(-50%); font-size: 11px; white-space: nowrap; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; padding: 4px 9px; border-radius: 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
-    .mode-option:hover .mode-option-tip { opacity: 1; }
-    .mode-stack { position: relative; width: 34px; height: 34px; cursor: pointer; }
-    .mode-stack-circle { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .mode-stack-circle.back { transform: translate(4px, 4px) scale(0.9); opacity: 0.5; font-size: 13px; }
-    .mode-stack-circle.front { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 2px 8px rgba(0,0,0,0.2); }
-    .mode-stack:hover .mode-stack-circle.front { transform: translateY(-2px); }
-    .mode-stack.open .mode-stack-circle.front { transform: scale(0); opacity: 0; }
-    .mode-stack.open .mode-stack-circle.back { transform: scale(0); opacity: 0; }
+    /* Mode switcher: one compact toggle button; tapping it slides a
+       horizontal strip of every mode up above the whole chat bar so people
+       can compare and pick, instead of hunting through a stacked menu. */
+    .mode-toggle-wrap { position: relative; flex-shrink: 0; }
+    .mode-toggle-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; color: ${t.text}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease; animation: modeGlow 2.6s ease-in-out infinite; }
+    .mode-toggle-btn:hover { transform: translateY(-2px); }
+    .mode-toggle-btn:active { transform: translateY(0) scale(0.94); }
+    .mode-toggle-btn.open { transform: scale(0.92); opacity: 0.85; }
+    @keyframes modeGlow { 0%,100% { box-shadow: 0 0 0 3px var(--glow), 0 0 8px var(--glow), 0 2px 8px rgba(0,0,0,0.2); } 50% { box-shadow: 0 0 0 3px var(--glow), 0 0 16px var(--glow), 0 2px 8px rgba(0,0,0,0.2); } }
+    .mode-row { position: absolute; left: 0; right: 0; bottom: calc(100% + 12px); display: flex; gap: 8px; overflow-x: auto; padding: 10px; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.3); animation: modeRowIn 0.2s cubic-bezier(.2,.8,.3,1) both; z-index: 6; }
+    .mode-row::-webkit-scrollbar { height: 4px; }
+    .mode-row::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+    @keyframes modeRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .mode-row-item { flex: 1 0 auto; min-width: 78px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 10px; border-radius: 12px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease; }
+    .mode-row-item:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-2px); }
+    .mode-row-item:active { transform: translateY(0) scale(0.96); }
+    .mode-row-item.active { color: ${t.text}; border-color: transparent; box-shadow: 0 0 0 2px var(--glow), 0 0 14px var(--glow); }
+    .mode-row-icon { font-size: 19px; line-height: 1; }
+    .mode-row-label { font-size: 10.5px; font-weight: 500; white-space: nowrap; }
 
     .attach-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease; }
     .attach-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
@@ -223,7 +224,7 @@ function buildCSS(t) {
 
     @media (prefers-reduced-motion: reduce) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
-      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-option, .mode-stack-circle { animation: none !important; transition: none !important; }
+      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-toggle-btn, .mode-row, .mode-row-item { animation: none !important; transition: none !important; }
     }
 
     /* Tablet & phone: tighter chrome so the chat itself stays the focus */
@@ -255,7 +256,10 @@ function buildCSS(t) {
       .bot-content, textarea { font-size: 14.5px; }
       .input-wrapper { padding: 8px 10px 14px; }
       .input-box { padding: 10px 10px 10px 14px; gap: 6px; }
-      .mode-stack, .attach-btn, .send-btn { width: 32px; height: 32px; }
+      .mode-toggle-btn, .attach-btn, .send-btn { width: 32px; height: 32px; }
+      .mode-row-item { min-width: 66px; padding: 8px 6px; }
+      .mode-row-icon { font-size: 17px; }
+      .mode-row-label { font-size: 10px; }
       .welcome-title { font-size: 21px; }
       .chip { padding: 8px 14px; font-size: 12.5px; }
     }
@@ -330,6 +334,7 @@ function stripMarkdownForSpeech(text) {
 const CHIPS = ["Who are you?", "What can you help with?", "Tell me something interesting", "Help me write something"];
 
 const MODES = [
+  { id: "normal", label: "Normal Mode", icon: "😊", glow: "#f5b942" },
   { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
   { id: "love", label: "Love Mode", icon: "❤️", glow: "#ff4f81" },
   { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
@@ -348,7 +353,7 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
   const [copiedIndex, setCopiedIndex] = useState(null);
-  const [mode, setMode] = useState("education");
+  const [mode, setMode] = useState("normal");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -464,7 +469,7 @@ export default function App() {
   const openConversation = async (conv) => {
     if (loading) return;
     setActiveConversationId(conv.id);
-    setMode(conv.mode || "education");
+    setMode(conv.mode || "normal");
     setSpeakingIndex(null);
     window.speechSynthesis?.cancel();
     setConvLoading(true);
@@ -885,41 +890,33 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="input-box">
-            <div className="mode-fab" ref={modeRef}>
-              {modeMenuOpen && (
-                <div className="mode-options">
-                  {MODES.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`mode-option ${mode === m.id ? "active" : ""}`}
-                      style={{ "--glow": m.glow }}
-                      onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
-                    >
-                      {m.icon}
-                      <span className="mode-option-tip">{m.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div
-                className={`mode-stack ${modeMenuOpen ? "open" : ""}`}
-                onClick={() => setModeMenuOpen(v => !v)}
-              >
-                <div
-                  className="mode-stack-circle back"
-                  style={{ "--glow": (MODES.find(m => m.id !== mode) || MODES[0]).glow }}
-                >
-                  {(MODES.find(m => m.id !== mode) || MODES[0]).icon}
-                </div>
-                <div
-                  className="mode-stack-circle front"
-                  style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
-                >
-                  {(MODES.find(m => m.id === mode) || MODES[0]).icon}
-                </div>
+          <div className="input-box" ref={modeRef}>
+            {modeMenuOpen && (
+              <div className="mode-row">
+                {MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`mode-row-item ${mode === m.id ? "active" : ""}`}
+                    style={{ "--glow": m.glow }}
+                    onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
+                  >
+                    <span className="mode-row-icon">{m.icon}</span>
+                    <span className="mode-row-label">{m.label}</span>
+                  </button>
+                ))}
               </div>
+            )}
+            <div className="mode-toggle-wrap">
+              <button
+                type="button"
+                className={`mode-toggle-btn ${modeMenuOpen ? "open" : ""}`}
+                style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
+                onClick={() => setModeMenuOpen(v => !v)}
+                title={`Mode: ${(MODES.find(m => m.id === mode) || MODES[0]).label} — tap to switch`}
+              >
+                {(MODES.find(m => m.id === mode) || MODES[0]).icon}
+              </button>
             </div>
             <input
               ref={fileInputRef}
