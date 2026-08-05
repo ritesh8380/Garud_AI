@@ -118,10 +118,12 @@ function buildCSS(t) {
     @keyframes avatarPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .bot-content { flex: 1; font-size: 15px; line-height: 1.78; color: ${t.assistantText}; word-break: break-word; padding-top: 1px; transition: color 0.3s; min-width: 0; }
     .bot-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .msg-actions { display: flex; flex-direction: row; gap: 6px; align-self: flex-start; }
     .speak-btn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease; align-self: flex-start; }
     .speak-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
     .speak-btn:active { transform: translateY(0) scale(0.94); }
     .speak-btn.speaking { color: ${t.avatarBot}; border-color: ${t.avatarBot}55; background: ${t.avatarBot}14; }
+    .speak-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
     .typing-block { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0; animation: mIn 0.25s ease both; }
     .typing-dots { display: flex; gap: 4px; align-items: center; padding-top: 5px; }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.subText}; animation: blink 1.4s ease-in-out infinite; }
@@ -136,6 +138,8 @@ function buildCSS(t) {
     .send-btn:hover:not(:disabled) { opacity: 0.82; transform: translateY(-1px); }
     .send-btn:active:not(:disabled) { transform: scale(0.92); }
     .send-btn:disabled { background: ${t.sendBtnDisabled}; color: ${t.subText}; cursor: not-allowed; opacity: 0.5; }
+    .send-btn.stop-mode { background: #ef4444; color: #fff; opacity: 1; cursor: pointer; }
+    .send-btn.stop-mode:hover { opacity: 0.85; }
     .status-badge { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid ${t.inputBorder}; background: transparent; font-family: 'Inter', sans-serif; font-size: 12px; color: ${t.subText}; }
     .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transition: background 0.4s, box-shadow 0.4s; }
     .sdot.online { background: #10a37f; box-shadow: 0 0 6px #10a37f99; animation: spulse 2.5s ease-in-out infinite; }
@@ -242,6 +246,33 @@ const StopIcon = () => (
   </svg>
 );
 
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const RegenerateIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1 4 1 10 7 10"/>
+    <polyline points="23 20 23 14 17 14"/>
+    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+  </svg>
+);
+
+const StopSquareIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="5" y="5" width="14" height="14" rx="3"/>
+  </svg>
+);
+
 // Strips markdown syntax so the speech engine reads clean prose instead of
 // literal asterisks, backticks, hashes, and bullet markers.
 function stripMarkdownForSpeech(text) {
@@ -280,6 +311,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [copiedIndex, setCopiedIndex] = useState(null);
   const [mode, setMode] = useState("education");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
@@ -292,6 +324,7 @@ export default function App() {
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
   const fileInputRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -423,6 +456,53 @@ export default function App() {
     }
   };
 
+  // Shared network call so both a fresh send and a regenerate can reuse the
+  // exact same request shape. Wires up an AbortController so the "stop"
+  // button can cancel an in-flight generation.
+  const requestReply = async (msg, images, textFiles) => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    let res;
+    if (images.length > 0) {
+      const filesNote = textFiles.length > 0
+        ? `\n\nAlso attached (as text/code):\n` + textFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")
+        : "";
+      res = await fetch("https://garud-ai.onrender.com/vision-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ message: msg + filesNote, images }),
+        signal: controller.signal,
+      });
+    } else {
+      res = await fetch("https://garud-ai.onrender.com/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: msg,
+          mode,
+          files: textFiles.map(f => ({ name: f.name, content: f.content })),
+        }),
+        signal: controller.signal,
+      });
+    }
+    if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+    const data = await res.json();
+    return data.reply ?? "Sorry, I didn't get a valid response.";
+  };
+
+  // Cancels whatever request is currently in flight (used by the stop
+  // button that replaces the send button while a reply is generating).
+  const stopGenerating = () => {
+    abortControllerRef.current?.abort();
+  };
+
   const send = async (msgOverride) => {
     const msg = (msgOverride || text).trim();
     const filesToSend = attachedFiles;
@@ -444,46 +524,20 @@ export default function App() {
       }
     }
 
-    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name) }]);
+    const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
+    const textFiles = filesToSend.filter(f => f.type !== "image").map(f => ({ name: f.name, content: f.content }));
+
+    // Stash the raw request payload on the user bubble (not just filenames)
+    // so a later "regenerate" on the following bot reply can replay the
+    // exact same question, images, and files.
+    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name), _images: images, _textFiles: textFiles }]);
     setText("");
     setAttachedFiles([]);
     setLoading(true);
     if (convId) saveMessage(convId, "user", msg, filesToSend.map(f => f.name)).catch(() => {});
 
     try {
-      const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
-      const textFiles = filesToSend.filter(f => f.type !== "image");
-
-      let res;
-      if (images.length > 0) {
-        const filesNote = textFiles.length > 0
-          ? `\n\nAlso attached (as text/code):\n` + textFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")
-          : "";
-        res = await fetch("https://garud-ai.onrender.com/vision-chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({ message: msg + filesNote, images }),
-        });
-      } else {
-        res = await fetch("https://garud-ai.onrender.com/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({
-            message: msg,
-            mode,
-            files: textFiles.map(f => ({ name: f.name, content: f.content })),
-          }),
-        });
-      }
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-      const data = await res.json();
-      const replyText = data.reply ?? "Sorry, I didn't get a valid response.";
+      const replyText = await requestReply(msg, images, textFiles);
       setChat(p => [...p, { type: "bot", text: replyText }]);
       if (convId) {
         saveMessage(convId, "bot", replyText).catch(() => {});
@@ -493,17 +547,66 @@ export default function App() {
           return updated.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
         });
       }
-    } catch {
-      setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
+    } catch (err) {
+      if (err.name === "AbortError") {
+        setChat(p => [...p, { type: "bot", text: "⏹ Generation stopped." }]);
+      } else {
+        setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
+      }
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
       setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  };
+
+  // Re-runs the request behind a bot reply (by its index in `chat`) and
+  // swaps that reply in place, so an accidental send or a flaky response
+  // can be redone without retyping the question or duplicating the thread.
+  const regenerate = async (botIndex) => {
+    if (loading) return;
+    let uIdx = botIndex - 1;
+    while (uIdx >= 0 && chat[uIdx].type !== "user") uIdx--;
+    if (uIdx < 0) return;
+    const userMsg = chat[uIdx];
+    const convId = activeConversationId;
+
+    setLoading(true);
+    try {
+      const replyText = await requestReply(userMsg.text, userMsg._images || [], userMsg._textFiles || []);
+      setChat(p => {
+        const next = [...p];
+        next[botIndex] = { type: "bot", text: replyText };
+        return next;
+      });
+      if (convId) saveMessage(convId, "bot", replyText).catch(() => {});
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        setChat(p => {
+          const next = [...p];
+          next[botIndex] = { type: "bot", text: "Could not reach the server. Please try again." };
+          return next;
+        });
+      }
+    } finally {
+      setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
   useEffect(() => {
     return () => { window.speechSynthesis?.cancel(); };
   }, []);
+
+  const copyMessage = async (index, rawText) => {
+    try {
+      await navigator.clipboard.writeText(rawText);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(i => (i === index ? null : i)), 1500);
+    } catch {
+      /* clipboard may be unavailable, fail silently */
+    }
+  };
 
   const toggleSpeak = (index, rawText) => {
     if (!("speechSynthesis" in window)) {
@@ -677,14 +780,33 @@ export default function App() {
                   <div className="bot-avatar">🦅</div>
                   <div className="bot-wrap">
                     <div className="bot-content"><FormattedMessage text={m.text} /></div>
-                    <button
-                      className={`speak-btn ${speakingIndex === i ? "speaking" : ""}`}
-                      onClick={() => toggleSpeak(i, m.text)}
-                      title={speakingIndex === i ? "Stop reading" : "Read aloud"}
-                      type="button"
-                    >
-                      {speakingIndex === i ? <StopIcon /> : <SpeakerIcon />}
-                    </button>
+                    <div className="msg-actions">
+                      <button
+                        className={`speak-btn ${speakingIndex === i ? "speaking" : ""}`}
+                        onClick={() => toggleSpeak(i, m.text)}
+                        title={speakingIndex === i ? "Stop reading" : "Read aloud"}
+                        type="button"
+                      >
+                        {speakingIndex === i ? <StopIcon /> : <SpeakerIcon />}
+                      </button>
+                      <button
+                        className={`speak-btn ${copiedIndex === i ? "speaking" : ""}`}
+                        onClick={() => copyMessage(i, m.text)}
+                        title={copiedIndex === i ? "Copied" : "Copy reply"}
+                        type="button"
+                      >
+                        {copiedIndex === i ? <CheckIcon /> : <CopyIcon />}
+                      </button>
+                      <button
+                        className="speak-btn"
+                        onClick={() => regenerate(i)}
+                        title="Regenerate reply"
+                        type="button"
+                        disabled={loading}
+                      >
+                        <RegenerateIcon />
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -754,26 +876,22 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {mode === "developer" && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".js,.jsx,.ts,.tsx,.py,.html,.css,.json,.md,.txt,.java,.c,.cpp,.go,.rb,.php,.sql,.yaml,.yml"
-                  style={{ display: "none" }}
-                  onChange={handleFileChange}
-                />
-                <button
-                  type="button"
-                  className="attach-btn"
-                  title="Attach code files for review"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  📎
-                </button>
-              </>
-            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".js,.jsx,.ts,.tsx,.py,.html,.css,.json,.md,.txt,.java,.c,.cpp,.go,.rb,.php,.sql,.yaml,.yml,.png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.csv,.xlsx"
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              className="attach-btn"
+              title="Attach files"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              📎
+            </button>
             <textarea
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
@@ -781,8 +899,13 @@ export default function App() {
               placeholder={mode === "developer" ? "Paste code or attach files to review…" : "Message Garuda AI"}
               disabled={loading} autoFocus
             />
-            <button className="send-btn" onClick={() => send()} disabled={!hasText || loading}>
-              <SendIcon />
+            <button
+              className={`send-btn ${loading ? "stop-mode" : ""}`}
+              onClick={() => (loading ? stopGenerating() : send())}
+              disabled={!loading && !hasText}
+              title={loading ? "Stop generating" : "Send"}
+            >
+              {loading ? <StopSquareIcon /> : <SendIcon />}
             </button>
           </div>
           <div className="hint">Garuda AI · garud-ai.onrender.com · Shift+Enter for new line</div>
