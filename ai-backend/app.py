@@ -98,23 +98,28 @@ VISION_MODEL = "qwen/qwen3.6-27b"
 def vision_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
-    image_data_url = data.get("image")  # "data:image/png;base64,...."
 
-    if not image_data_url:
+    # Accept either one image ("image") or several ("images") — the main
+    # chat can attach multiple screenshots/code files in one message, while
+    # the Developer Code Helper still sends a single "image".
+    images = data.get("images")
+    if not images:
+        single = data.get("image")
+        images = [single] if single else []
+
+    if not images:
         return jsonify({"error": "No image was received."}), 400
+
+    content_blocks = [
+        {"type": "text", "text": message or "Describe what's in this image and point out anything that looks like a bug or error."}
+    ]
+    for img in images:
+        content_blocks.append({"type": "image_url", "image_url": {"url": img}})
 
     try:
         completion = client.chat.completions.create(
             model=VISION_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": message or "Describe what's in this image and point out anything that looks like a bug or error."},
-                        {"type": "image_url", "image_url": {"url": image_data_url}},
-                    ],
-                }
-            ],
+            messages=[{"role": "user", "content": content_blocks}],
             temperature=1,
             max_completion_tokens=1024,
         )
