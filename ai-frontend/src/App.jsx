@@ -209,6 +209,7 @@ function buildCSS(t) {
     .file-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px 8px; }
     .file-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 8px 5px 10px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: ${t.inputBg}; color: ${t.text}; max-width: 220px; }
     .file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-chip-thumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
     .file-chip-remove { border: none; background: transparent; color: ${t.subText}; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; flex-shrink: 0; }
     .file-chip-remove:hover { color: ${t.text}; }
     .msg-file-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; justify-content: flex-end; }
@@ -337,23 +338,35 @@ export default function App() {
     el.style.height = Math.min(el.scrollHeight, 180) + "px";
   }, [text]);
 
-  const MAX_FILE_SIZE = 200 * 1024; // 200KB per file — keeps requests within reasonable LLM token limits
+  const MAX_FILE_SIZE = 200 * 1024; // 200KB per text file — keeps requests within reasonable LLM token limits
+  const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB per image
 
-  const readFileAsText = (file) => new Promise((resolve) => {
+  const readFile = (file) => new Promise((resolve) => {
+    if (file.type.startsWith("image/")) {
+      if (file.size > MAX_IMAGE_SIZE) {
+        resolve({ name: file.name, type: "image", error: `Image too large — ${(file.size / (1024 * 1024)).toFixed(1)}MB, limit is 4MB` });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name, type: "image", dataUrl: reader.result });
+      reader.onerror = () => resolve({ name: file.name, type: "image", error: "Could not read this image" });
+      reader.readAsDataURL(file);
+      return;
+    }
     if (file.size > MAX_FILE_SIZE) {
-      resolve({ name: file.name, content: `[File too large to include — ${(file.size / 1024).toFixed(0)}KB, limit is 200KB]` });
+      resolve({ name: file.name, type: "text", content: `[File too large to include — ${(file.size / 1024).toFixed(0)}KB, limit is 200KB]` });
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => resolve({ name: file.name, content: reader.result });
-    reader.onerror = () => resolve({ name: file.name, content: "[Could not read this file]" });
+    reader.onload = () => resolve({ name: file.name, type: "text", content: reader.result });
+    reader.onerror = () => resolve({ name: file.name, type: "text", content: "[Could not read this file]" });
     reader.readAsText(file);
   });
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const results = await Promise.all(files.map(readFileAsText));
+    const results = await Promise.all(files.map(readFile));
     setAttachedFiles(prev => [...prev, ...results]);
     e.target.value = ""; // allow re-selecting the same file later
   };
@@ -438,18 +451,36 @@ export default function App() {
     if (convId) saveMessage(convId, "user", msg, filesToSend.map(f => f.name)).catch(() => {});
 
     try {
-      const res = await fetch("https://garud-ai.onrender.com/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          message: msg,
-          mode,
-          files: filesToSend.map(f => ({ name: f.name, content: f.content })),
-        }),
-      });
+      const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
+      const textFiles = filesToSend.filter(f => f.type !== "image");
+
+      let res;
+      if (images.length > 0) {
+        const filesNote = textFiles.length > 0
+          ? `\n\nAlso attached (as text/code):\n` + textFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")
+          : "";
+        res = await fetch("https://garud-ai.onrender.com/vision-chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ message: msg + filesNote, images }),
+        });
+      } else {
+        res = await fetch("https://garud-ai.onrender.com/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: msg,
+            mode,
+            files: textFiles.map(f => ({ name: f.name, content: f.content })),
+          }),
+        });
+      }
       if (!res.ok) throw new Error(`Server responded with ${res.status}`);
       const data = await res.json();
       const replyText = data.reply ?? "Sorry, I didn't get a valid response.";
@@ -676,7 +707,12 @@ export default function App() {
             <div className="file-chips">
               {attachedFiles.map((f, i) => (
                 <div key={i} className="file-chip">
-                  <span className="file-chip-name">📄 {f.name}</span>
+                  {f.type === "image" && f.dataUrl ? (
+                    <img src={f.dataUrl} alt="" className="file-chip-thumb" />
+                  ) : (
+                    <span>{f.type === "image" ? "⚠️" : "📄"}</span>
+                  )}
+                  <span className="file-chip-name">{f.error || f.name}</span>
                   <button type="button" className="file-chip-remove" onClick={() => removeFile(i)}>✕</button>
                 </div>
               ))}
