@@ -11,6 +11,7 @@ import {
 import AuthScreen from "./Authscreen";
 import FormattedMessage from "./FormattedMessage";
 import Sidebar from "./Sidebar";
+import DevCodeHelper from "./DevCodeHelper";
 
 const DARK = {
   bg: "#212121", text: "#ececec", subText: "#8e8ea0", dimText: "#4a4a5a",
@@ -143,7 +144,12 @@ function buildCSS(t) {
     .hint { text-align: center; font-size: 11px; color: ${t.hintText}; margin-top: 10px; letter-spacing: 0.02em; transition: color 0.3s; }
     .modal-overlay { position: fixed; inset: 0; background: ${t.modalOverlay}; display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); animation: fadeO 0.2s both; }
     @keyframes fadeO{from{opacity:0}to{opacity:1}}
-    .modal { background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; border-radius: 20px; width: 300px; padding: 32px 24px 24px; position: relative; text-align: center; animation: slideU 0.25s cubic-bezier(.34,1.56,.64,1) both; box-shadow: 0 24px 60px rgba(0,0,0,0.4); transition: background 0.3s; }
+    .modal { background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; border-radius: 20px; width: 300px; padding: 32px 24px 24px; position: relative; text-align: center; animation: slideU 0.25s cubic-bezier(.34,1.56,.64,1) both; box-shadow: 0 24px 60px rgba(0,0,0,0.4); transition: background 0.3s, width 0.2s ease; }
+    .modal.wide { width: min(560px, 90vw); text-align: left; }
+    .modal-tabs { display: flex; gap: 6px; margin: 16px 0 18px; border-bottom: 1px solid ${t.inputBorder}; }
+    .modal-tab { flex: 1; padding: 8px 4px; background: none; border: none; border-bottom: 2px solid transparent; color: ${t.subText}; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+    .modal-tab.active { color: ${t.text}; border-bottom-color: #ab68ff; }
+    .modal-tab:hover { color: ${t.text}; }
     @keyframes slideU{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
     .modal-close { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 6px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: background 0.15s; }
     .modal-close:hover { background: ${t.inputBg}; }
@@ -151,6 +157,7 @@ function buildCSS(t) {
     .modal-name { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: ${t.text}; margin-bottom: 4px; transition: color 0.3s; }
     .modal-label { font-size: 11px; color: ${t.subText}; margin-bottom: 20px; letter-spacing: 0.06em; }
     .modal-divider { height: 1px; background: ${t.inputBorder}; margin: 0 0 20px; }
+    .modal-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
     .modal-insta { display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 10px; border: 1px solid ${t.inputBorder}; background: ${t.inputBg}; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 13px; text-decoration: none; transition: opacity 0.15s; }
     .modal-insta:hover { opacity: 0.7; }
     .insta-icon { width: 18px; height: 18px; background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
@@ -266,6 +273,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [showDev, setShowDev] = useState(false);
+  const [devTab, setDevTab] = useState("profile");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [session, setSession] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -531,19 +539,38 @@ export default function App() {
 
       {showDev && (
         <div className="modal-overlay" onClick={() => setShowDev(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className={`modal ${devTab === "code" ? "wide" : ""}`} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setShowDev(false)}>✕</button>
             <span className="modal-eagle">🦅</span>
             <div className="modal-name">Ritesh Sharma</div>
             <div className="modal-label">Developer · Garuda AI</div>
-            <div className="modal-divider"/>
-            <a className="modal-insta" href="https://instagram.com/ritesh.jns" target="_blank" rel="noopener noreferrer">
-              <div className="insta-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-              </div>
-              @ritesh.jns
-            </a>
-            <div className="modal-built">Built with 🦅 and precision</div>
+
+            <div className="modal-tabs">
+              <button className={`modal-tab ${devTab === "profile" ? "active" : ""}`} onClick={() => setDevTab("profile")} type="button">Profile</button>
+              <button className={`modal-tab ${devTab === "code" ? "active" : ""}`} onClick={() => setDevTab("code")} type="button">Code Helper</button>
+            </div>
+
+            {devTab === "profile" ? (
+              <>
+                <div className="modal-links">
+                  <a className="modal-insta" href="https://instagram.com/ritesh.jns" target="_blank" rel="noopener noreferrer">
+                    <div className="insta-icon">
+                      <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                    @ritesh.jns
+                  </a>
+                  <a className="modal-insta" href="https://github.com/ritesh8380/Garud_AI" target="_blank" rel="noopener noreferrer">
+                    <div className="insta-icon" style={{ background: t.text, borderRadius: "50%" }}>
+                      <svg viewBox="0 0 24 24" fill={t.bg}><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.333-1.755-1.333-1.755-1.09-.744.083-.729.083-.729 1.205.084 1.84 1.236 1.84 1.236 1.07 1.834 2.809 1.304 3.495.997.108-.775.42-1.305.763-1.605-2.665-.303-5.466-1.334-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.435.375.81 1.11.81 2.235 0 1.615-.015 2.915-.015 3.31 0 .32.21.695.825.575C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                    </div>
+                    View source
+                  </a>
+                </div>
+                <div className="modal-built">Built with 🦅 and precision</div>
+              </>
+            ) : (
+              <DevCodeHelper t={t} />
+            )}
           </div>
         </div>
       )}
