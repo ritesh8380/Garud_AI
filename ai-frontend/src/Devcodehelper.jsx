@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import FormattedMessage from "./FormattedMessage";
 
 // Only these count as "code" worth loading into the picker — keeps the
@@ -32,6 +32,8 @@ export default function DevCodeHelper({ t }) {
   const [question, setQuestion] = useState("");
   const [thread, setThread] = useState([]);
   const [asking, setAsking] = useState(false);
+  const [attachedImage, setAttachedImage] = useState(null); // { dataUrl, name }
+  const imageInputRef = useRef(null);
 
   const loadRepo = async () => {
     setError(""); setFiles([]); setSelectedFile(""); setFileContent(""); setThread([]);
@@ -82,26 +84,55 @@ export default function DevCodeHelper({ t }) {
     }
   };
 
+  const handleImagePick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("Please pick an image file."); return; }
+    if (file.size > 4 * 1024 * 1024) { setError("Image is too large — please use one under 4MB."); return; }
+    setError("");
+    const reader = new FileReader();
+    reader.onload = () => setAttachedImage({ dataUrl: reader.result, name: file.name });
+    reader.readAsDataURL(file);
+  };
+
   const ask = async () => {
     const q = question.trim();
-    if (!q || asking || !selectedFile) return;
-    setThread(p => [...p, { role: "user", text: q }]);
+    if ((!q && !attachedImage) || asking) return;
+    if (!attachedImage && !selectedFile) return; // text questions still need a loaded file for context
+
+    setThread(p => [...p, { role: "user", text: q || "(sent an image)", image: attachedImage?.dataUrl }]);
     setQuestion("");
+    const imageToSend = attachedImage;
+    setAttachedImage(null);
     setAsking(true);
+
     try {
-      const prompt =
-        `You are helping a developer understand and fix a bug in real code from a GitHub repository.\n` +
-        `Repo: ${owner}/${repo}\nFile: ${selectedFile}${truncated ? " (truncated to first " + MAX_FILE_CHARS + " chars)" : ""}\n\n` +
-        `--- FILE CONTENT START ---\n${fileContent}\n--- FILE CONTENT END ---\n\n` +
-        `Question: ${q}\n\n` +
-        `Explain clearly and, if there's a fix, show exactly what to change.`;
-      const res = await fetch("https://garud-ai.onrender.com/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt }),
-      });
+      let res;
+      if (imageToSend) {
+        const contextNote = selectedFile
+          ? `This relates to the file ${selectedFile} from ${owner}/${repo}, currently open in the code helper. `
+          : "";
+        res = await fetch("https://garud-ai.onrender.com/vision-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: contextNote + q, image: imageToSend.dataUrl }),
+        });
+      } else {
+        const prompt =
+          `You are helping a developer understand and fix a bug in real code from a GitHub repository.\n` +
+          `Repo: ${owner}/${repo}\nFile: ${selectedFile}${truncated ? " (truncated to first " + MAX_FILE_CHARS + " chars)" : ""}\n\n` +
+          `--- FILE CONTENT START ---\n${fileContent}\n--- FILE CONTENT END ---\n\n` +
+          `Question: ${q}\n\n` +
+          `Explain clearly and, if there's a fix, show exactly what to change.`;
+        res = await fetch("https://garud-ai.onrender.com/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: prompt }),
+        });
+      }
       const data = await res.json();
-      setThread(p => [...p, { role: "bot", text: data.reply }]);
+      setThread(p => [...p, { role: "bot", text: data.reply || data.error || "No response." }]);
     } catch {
       setThread(p => [...p, { role: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
@@ -126,9 +157,17 @@ export default function DevCodeHelper({ t }) {
         .dch-thread { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; padding-right: 2px; }
         .dch-msg.user { align-self: flex-end; background: ${t.userPillBg}; border: 1px solid ${t.userPillBorder}; border-radius: 12px; padding: 8px 12px; font-size: 13px; color: ${t.userText}; max-width: 85%; }
         .dch-msg.bot { font-size: 13px; color: ${t.assistantText}; line-height: 1.6; }
-        .dch-ask-row { display: flex; gap: 8px; }
+        .dch-msg img { max-width: 100%; border-radius: 8px; margin-top: 6px; display: block; }
+        .dch-ask-row { display: flex; gap: 8px; align-items: flex-end; }
         .dch-ask-row .dch-input { font-size: 13px; }
         .dch-empty { font-size: 12px; color: ${t.subText}; text-align: center; padding: 16px 0; }
+        .dch-img-btn { width: 38px; height: 38px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: ${t.inputBg}; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; transition: color 0.15s, border-color 0.15s; }
+        .dch-img-btn:hover { color: ${t.text}; border-color: #ab68ff; }
+        .dch-img-preview { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: ${t.inputBg}; }
+        .dch-img-preview img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
+        .dch-img-preview span { font-size: 11px; color: ${t.subText}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dch-img-remove { background: none; border: none; color: ${t.subText}; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+        .dch-img-remove:hover { color: #ef4444; }
       `}</style>
 
       <div className="dch-row">
@@ -143,7 +182,7 @@ export default function DevCodeHelper({ t }) {
           {loadingRepo ? "Loading…" : "Load"}
         </button>
       </div>
-      <div className="dch-hint">Public repos only — this reads files through GitHub's public API, no login needed.</div>
+      <div className="dch-hint">Public repos only, for code questions — or skip this and just attach a screenshot below.</div>
 
       {error && <div className="dch-error">{error}</div>}
 
@@ -153,38 +192,55 @@ export default function DevCodeHelper({ t }) {
             <option value="">Select a file to ask about…</option>
             {files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
           </select>
-
           {loadingFile && <div className="dch-hint">Fetching file…</div>}
-
           {selectedFile && !loadingFile && fileContent && (
-            <>
-              <div className="dch-chip">{selectedFile} · {fileContent.length}{truncated ? "+" : ""} chars{truncated ? " (truncated)" : ""}</div>
-
-              <div className="dch-thread">
-                {thread.length === 0 && <div className="dch-empty">Ask anything about this file — a bug, what a function does, how to fix an error.</div>}
-                {thread.map((m, i) => (
-                  <div key={i} className={`dch-msg ${m.role}`}>
-                    {m.role === "user" ? m.text : <FormattedMessage text={m.text} />}
-                  </div>
-                ))}
-                {asking && <div className="dch-msg bot">Thinking…</div>}
-              </div>
-
-              <div className="dch-ask-row">
-                <input
-                  className="dch-input"
-                  placeholder="Why does this throw an error on line 12?"
-                  value={question}
-                  onChange={e => setQuestion(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && ask()}
-                  disabled={asking}
-                />
-                <button className="dch-btn" onClick={ask} disabled={asking || !question.trim()}>Ask</button>
-              </div>
-            </>
+            <div className="dch-chip">{selectedFile} · {fileContent.length}{truncated ? "+" : ""} chars{truncated ? " (truncated)" : ""}</div>
           )}
         </>
       )}
+
+      <div className="dch-thread">
+        {thread.length === 0 && (
+          <div className="dch-empty">
+            {selectedFile ? "Ask anything about this file, or attach a screenshot below." : "Attach a screenshot — an error, a broken UI, a stack trace — and ask about it."}
+          </div>
+        )}
+        {thread.map((m, i) => (
+          <div key={i} className={`dch-msg ${m.role}`}>
+            {m.role === "user" ? (
+              <>
+                {m.text}
+                {m.image && <img src={m.image} alt="attached" />}
+              </>
+            ) : <FormattedMessage text={m.text} />}
+          </div>
+        ))}
+        {asking && <div className="dch-msg bot">Thinking…</div>}
+      </div>
+
+      {attachedImage && (
+        <div className="dch-img-preview">
+          <img src={attachedImage.dataUrl} alt="preview" />
+          <span>{attachedImage.name}</span>
+          <button className="dch-img-remove" onClick={() => setAttachedImage(null)} type="button">✕</button>
+        </div>
+      )}
+
+      <div className="dch-ask-row">
+        <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImagePick} style={{ display: "none" }} />
+        <button className="dch-img-btn" onClick={() => imageInputRef.current?.click()} title="Attach a screenshot" type="button">🖼️</button>
+        <input
+          className="dch-input"
+          placeholder={selectedFile ? "Why does this throw an error on line 12?" : "What's wrong in this screenshot?"}
+          value={question}
+          onChange={e => setQuestion(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && ask()}
+          disabled={asking}
+        />
+        <button className="dch-btn" onClick={ask} disabled={asking || (!question.trim() && !attachedImage) || (!attachedImage && !selectedFile)}>
+          Ask
+        </button>
+      </div>
     </div>
   );
 }
