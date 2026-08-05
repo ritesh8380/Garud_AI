@@ -69,10 +69,9 @@ function buildCSS(t) {
     .sidebar-icon-btn:hover { background: ${t.chipHoverBg}; color: ${t.text}; }
     .sidebar-icon-btn.starred { color: #f5b942; }
     .sidebar-note { padding: 10px 14px; font-size: 10.5px; color: ${t.dimText}; text-align: center; border-top: 1px solid ${t.topbarBorder}; letter-spacing: 0.02em; }
-    .sidebar-toggle-btn { display: none; }
+    .sidebar-toggle-btn { display: flex; }
     @media (max-width: 860px) {
       .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); }
-      .sidebar-toggle-btn { display: flex; }
     }
     .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
     .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
@@ -265,7 +264,7 @@ export default function App() {
   const [text, setText] = useState("");
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const [showDev, setShowDev] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [session, setSession] = useState(null);
@@ -279,7 +278,7 @@ export default function App() {
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [convLoading, setConvLoading] = useState(false);
   const [showStarredOnly, setShowStarredOnly] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
