@@ -71,8 +71,10 @@ function buildCSS(t) {
     .sidebar-icon-btn.starred { color: #f5b942; }
     .sidebar-note { padding: 10px 14px; font-size: 10.5px; color: ${t.dimText}; text-align: center; border-top: 1px solid ${t.topbarBorder}; letter-spacing: 0.02em; }
     .sidebar-toggle-btn { display: flex; }
+    .sidebar-backdrop { display: none; }
     @media (max-width: 860px) {
-      .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); }
+      .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); max-width: 82vw; }
+      .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 25; animation: fadeO 0.2s both; }
     }
     .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
     .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
@@ -223,6 +225,40 @@ function buildCSS(t) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
       .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-option, .mode-stack-circle { animation: none !important; transition: none !important; }
     }
+
+    /* Tablet & phone: tighter chrome so the chat itself stays the focus */
+    @media (max-width: 860px) {
+      .topbar { padding: 10px 14px; }
+      .conversation { padding: 20px 14px 12px; }
+      .input-wrapper { padding: 8px 14px 16px; }
+      .welcome-title { font-size: 24px; }
+      .welcome-eagle { font-size: 42px; margin-bottom: 14px; }
+      .user-pill { max-width: 85%; }
+      .msg-block.bot { gap: 10px; }
+      .dev-btn { padding: 0 12px; font-size: 11.5px; }
+      .topbar-right { gap: 6px; }
+      .modal { width: min(300px, 88vw); }
+      .account-menu { width: min(220px, 80vw); }
+    }
+
+    /* Small phones: drop secondary chrome so nothing wraps or overflows */
+    @media (max-width: 480px) {
+      .topbar { padding: 8px 10px; }
+      .brand-name { display: none; }
+      .status-label { display: none; }
+      .status-badge { padding: 0 8px; height: 28px; gap: 0; }
+      .icon-btn, .avatar-btn { width: 30px; height: 30px; }
+      .dev-btn { padding: 0 9px; }
+      .conversation { padding: 16px 10px 8px; }
+      .msg-block { padding: 14px 0; }
+      .user-pill { max-width: 90%; padding: 10px 14px; font-size: 14px; }
+      .bot-content, textarea { font-size: 14.5px; }
+      .input-wrapper { padding: 8px 10px 14px; }
+      .input-box { padding: 10px 10px 10px 14px; gap: 6px; }
+      .mode-stack, .attach-btn, .send-btn { width: 32px; height: 32px; }
+      .welcome-title { font-size: 21px; }
+      .chip { padding: 8px 14px; font-size: 12.5px; }
+    }
   `;
 }
 
@@ -319,7 +355,13 @@ export default function App() {
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [convLoading, setConvLoading] = useState(false);
   const [showStarredOnly, setShowStarredOnly] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth > 860 : true));
+  // On phones the sidebar is an overlay, not a rail — closing it after picking
+  // a chat (or starting a new one) keeps the conversation in view instead of
+  // leaving the list covering the screen. No-op on wider layouts.
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== "undefined" && window.innerWidth <= 860) setSidebarOpen(false);
+  };
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
@@ -710,12 +752,15 @@ export default function App() {
       )}
 
       <div className="app-layout">
+        {sidebarOpen && (
+          <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+        )}
         <Sidebar
           t={t}
           conversations={conversations}
           activeId={activeConversationId}
-          onSelect={openConversation}
-          onNew={startNewChat}
+          onSelect={(c) => { openConversation(c); closeSidebarOnMobile(); }}
+          onNew={() => { startNewChat(); closeSidebarOnMobile(); }}
           onToggleStar={handleToggleStar}
           onDelete={handleDeleteConversation}
           showStarredOnly={showStarredOnly}
@@ -732,7 +777,7 @@ export default function App() {
           <div className="topbar-right">
             <div className="status-badge">
               <span className={`sdot ${isOnline ? "online" : "offline"}`} />
-              {isOnline ? "online" : "offline"}
+              <span className="status-label">{isOnline ? "online" : "offline"}</span>
             </div>
             <button className="icon-btn" onClick={() => setIsDark(d => !d)}>{isDark ? "☀️" : "🌙"}</button>
             <button className="dev-btn" onClick={() => setShowDev(true)}>Developer</button>
