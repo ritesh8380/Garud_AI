@@ -18,8 +18,19 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 # System prompts per mode. The frontend sends { message, mode } — "mode" is
-# either "education" or "love". Anything unrecognized falls back to education.
+# one of "normal", "education", "love", or "developer". Anything unrecognized
+# falls back to normal.
 MODE_PROMPTS = {
+    "normal": (
+        "You are Garuda AI in Normal Mode — talk like a smart, easygoing friend "
+        "having a real conversation, not a formal assistant. Keep replies calm, "
+        "warm, and satisfying to read: get to the point without being curt, and "
+        "let a bit of personality come through. Sprinkle in creative, well-placed "
+        "emojis naturally to add warmth and expressiveness — never spam them, just "
+        "enough to feel human. Be genuinely sharp and helpful underneath the "
+        "relaxed tone; this is a friend who happens to be very knowledgeable, "
+        "not someone dumbing things down."
+    ),
     "education": (
         "You are Garuda AI in Education Mode. Break every answer into clear, "
         "numbered steps. After each step, give one short, relatable real-life "
@@ -56,9 +67,9 @@ def chat():
         return jsonify({"error": "Message is required"}), 400
 
     user_message = data["message"]
-    mode = data.get("mode", "education")
+    mode = data.get("mode", "normal")
     files = data.get("files", [])
-    system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["education"])
+    system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["normal"])
 
     if files:
         files_block = "\n\n".join(
