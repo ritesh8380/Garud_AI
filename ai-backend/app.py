@@ -73,7 +73,7 @@ def chat():
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -86,6 +86,42 @@ def chat():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# Groq's vision lineup changes fairly often — this is the current
+# vision-capable model as of mid-2026. If it stops working, check
+# https://console.groq.com/docs/vision for the current model name.
+VISION_MODEL = "qwen/qwen3.6-27b"
+
+
+@app.route("/vision-chat", methods=["POST"])
+def vision_chat():
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    image_data_url = data.get("image")  # "data:image/png;base64,...."
+
+    if not image_data_url:
+        return jsonify({"error": "No image was received."}), 400
+
+    try:
+        completion = client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": message or "Describe what's in this image and point out anything that looks like a bug or error."},
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                    ],
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+        )
+        return jsonify({"reply": completion.choices[0].message.content})
+    except Exception as e:
+        app.logger.error(f"vision-chat error: {e}")
+        return jsonify({"error": "Couldn't process that image. Try a smaller file or a different format (JPG/PNG)."}), 500
 
 
 # IMPORTANT: For Render deployment
