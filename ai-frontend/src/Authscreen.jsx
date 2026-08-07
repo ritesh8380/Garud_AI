@@ -71,9 +71,6 @@ function GoogleIcon() {
   );
 }
 
-// The signature moment: a wing sweeping open, built from three layered
-// stroke paths that draw themselves in on mount. Ties the auth gate back
-// to Garuda without leaning on a literal eagle illustration.
 function WingSignature() {
   return (
     <svg className="wing-glow" width="480" height="480" viewBox="0 0 480 480" fill="none">
@@ -88,7 +85,7 @@ function WingSignature() {
 }
 
 export default function AuthScreen({ t, isDark, onToggleTheme }) {
-  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+  const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -103,7 +100,6 @@ export default function AuthScreen({ t, isDark, onToggleTheme }) {
       options: { redirectTo: window.location.origin },
     });
     if (err) { setError(err.message); setGoogleLoading(false); }
-    // On success the browser redirects away, so no need to reset loading here.
   };
 
   const handleSubmit = async (e) => {
