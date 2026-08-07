@@ -4,7 +4,6 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  // Fails loudly in dev so a missing .env doesn't show up as a silent auth bug later.
   console.error(
     "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Copy .env.example to .env and fill in your project values."
   );
@@ -17,13 +16,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
   },
 });
-
-// --- Conversation history -------------------------------------------------
-// Backed by the `conversations` / `messages` tables set up in
-// supabase_schema.sql. RLS scopes every row to the signed-in user, and a
-// server-side pg_cron job hard-deletes non-starred conversations after an
-// hour of inactivity, so unstarred chat history cleans itself up even if
-// the user never reopens the app.
 
 export async function listConversations() {
   const { data, error } = await supabase
