@@ -1,8 +1,6 @@
 import { useState, useRef } from "react";
 import FormattedMessage from "./FormattedMessage";
 
-// Only these count as "code" worth loading into the picker — keeps the
-// dropdown from filling up with images, locks files, and node_modules noise.
 const CODE_EXTENSIONS = [
   "js", "jsx", "ts", "tsx", "py", "java", "go", "rb", "php", "c", "cpp", "h",
   "cs", "html", "css", "scss", "json", "md", "sql", "sh", "yml", "yaml",
@@ -32,7 +30,7 @@ export default function DevCodeHelper({ t }) {
   const [question, setQuestion] = useState("");
   const [thread, setThread] = useState([]);
   const [asking, setAsking] = useState(false);
-  const [attachedImage, setAttachedImage] = useState(null); // { dataUrl, name }
+  const [attachedImage, setAttachedImage] = useState(null);
   const imageInputRef = useRef(null);
 
   const loadRepo = async () => {
@@ -58,9 +56,7 @@ export default function DevCodeHelper({ t }) {
         setLoadingRepo(false);
         if (codeFiles.length === 0) setError("Found the repo, but no recognizable source files in it.");
         return;
-      } catch {
-        /* try next branch */
-      }
+      } catch {}
     }
     setLoadingRepo(false);
     setError("Couldn't read that repo — check it's public, and the URL is correct.");
@@ -86,7 +82,7 @@ export default function DevCodeHelper({ t }) {
 
   const handleImagePick = (e) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same file later
+    e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) { setError("Please pick an image file."); return; }
     if (file.size > 4 * 1024 * 1024) { setError("Image is too large — please use one under 4MB."); return; }
@@ -99,7 +95,7 @@ export default function DevCodeHelper({ t }) {
   const ask = async () => {
     const q = question.trim();
     if ((!q && !attachedImage) || asking) return;
-    if (!attachedImage && !selectedFile) return; // text questions still need a loaded file for context
+    if (!attachedImage && !selectedFile) return;
 
     setThread(p => [...p, { role: "user", text: q || "(sent an image)", image: attachedImage?.dataUrl }]);
     setQuestion("");
