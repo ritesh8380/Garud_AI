@@ -1,66 +1,5 @@
 import { useState } from "react";
 
-// Small, dependency-free markdown renderer tuned for chat replies.
-// Handles: fenced code blocks, inline code, bold, italic, links,
-// headers, and ordered/unordered lists. Not a full CommonMark parser —
-// just enough to make AI replies readable instead of one dense paragraph.
-
-// Rough, language-agnostic keyword set spanning C-like/Python/JS/Go/Rust —
-// not a real parser, just enough overlap to color the common cases across
-// whatever language shows up in a code block.
-const KEYWORDS = [
-  "if", "else", "elif", "for", "while", "do", "switch", "case", "break", "continue",
-  "return", "function", "class", "struct", "enum", "public", "private", "protected",
-  "static", "const", "let", "var", "new", "delete", "try", "catch", "finally", "throw",
-  "import", "export", "from", "default", "extends", "implements", "interface", "void",
-  "true", "false", "null", "undefined", "None", "True", "False", "and", "or", "not",
-  "in", "is", "def", "except", "with", "as", "lambda", "yield", "async", "await",
-  "this", "self", "super", "typeof", "instanceof", "namespace", "using", "template",
-  "typename", "virtual", "override", "auto", "int", "float", "double", "char", "bool",
-  "string", "std", "package", "fn", "impl", "match", "pub", "mut", "mod", "use", "trait",
-  "type", "abstract", "final", "synchronized", "throws", "go", "func", "defer", "chan", "select",
-];
-
-// One combined regex, tried left-to-right: preprocessor directives, then
-// comments, strings, numbers, keywords, then bare function calls (an
-// identifier immediately followed by "("). Everything else passes through
-// as plain text. Not a real tokenizer — just enough to look like an IDE.
-const TOKEN_RE = new RegExp(
-  [
-    `(?<pre>#\\w+)`,
-    `(?<comment>\\/\\/[^\\n]*|#[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/)`,
-    `(?<string>"""[\\s\\S]*?"""|'''[\\s\\S]*?'''|"(?:\\\\.|[^"\\\\\\n])*"|'(?:\\\\.|[^'\\\\\\n])*'|` + "`(?:\\\\.|[^`\\\\])*`)",
-    `(?<number>\\b\\d+\\.?\\d*\\b)`,
-    `(?<keyword>\\b(?:${KEYWORDS.join("|")})\\b)`,
-    `(?<func>\\b[A-Za-z_]\\w*(?=\\())`,
-  ].join("|"),
-  "g"
-);
-
-function highlightCode(code) {
-  const nodes = [];
-  let last = 0;
-  let key = 0;
-  let m;
-  TOKEN_RE.lastIndex = 0;
-  while ((m = TOKEN_RE.exec(code)) !== null) {
-    if (m.index > last) nodes.push(code.slice(last, m.index));
-    const g = m.groups;
-    let cls = "";
-    if (g.pre) cls = "tok-pre";
-    else if (g.comment) cls = "tok-comment";
-    else if (g.string) cls = "tok-string";
-    else if (g.number) cls = "tok-number";
-    else if (g.keyword) cls = "tok-keyword";
-    else if (g.func) cls = "tok-func";
-    nodes.push(<span key={key++} className={cls}>{m[0]}</span>);
-    last = TOKEN_RE.lastIndex;
-    if (m.index === TOKEN_RE.lastIndex) TOKEN_RE.lastIndex++; // guard against zero-width matches
-  }
-  if (last < code.length) nodes.push(code.slice(last));
-  return nodes;
-}
-
 function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
 
@@ -69,9 +8,7 @@ function CodeBlock({ lang, code }) {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard may be unavailable, fail silently */
-    }
+    } catch {}
   };
 
   return (
@@ -83,13 +20,12 @@ function CodeBlock({ lang, code }) {
         </button>
       </div>
       <pre>
-        <code>{highlightCode(code)}</code>
+        <code>{code}</code>
       </pre>
     </div>
   );
 }
 
-// Parses **bold**, *italic*/_italic_, `code`, and [text](url) within a line.
 function renderInline(text, keyPrefix) {
   const nodes = [];
   const pattern = /(\*\*.+?\*\*|`.+?`|\[.+?\]\(.+?\)|_[^_]+_|\*[^*]+\*)/g;
@@ -126,8 +62,6 @@ function renderInline(text, keyPrefix) {
 export default function FormattedMessage({ text }) {
   if (!text) return null;
 
-  // Split out fenced code blocks first so their contents are never touched
-  // by inline/list/header parsing.
   const segments = [];
   const fenceRe = /```(\w*)\n?([\s\S]*?)```/g;
   let lastIndex = 0;
@@ -140,7 +74,7 @@ export default function FormattedMessage({ text }) {
   if (lastIndex < text.length) segments.push({ type: "text", value: text.slice(lastIndex) });
 
   const blocks = [];
-  let listBuffer = null; // { ordered: bool, items: [] }
+  let listBuffer = null;
 
   const flushList = (key) => {
     if (!listBuffer) return;
@@ -188,7 +122,7 @@ export default function FormattedMessage({ text }) {
         flushPara(key);
         flushList(`list-${key}`);
         const level = heading[1].length;
-        const visualLevel = level + 2 > 6 ? 6 : level + 2; // h1/h2/h3 md -> h3/h4/h5 visually
+        const visualLevel = level + 2 > 6 ? 6 : level + 2;
         const HTag = `h${visualLevel}`;
         blocks.push(
           <HTag key={`h-${key}`} className={`md-h md-h${visualLevel}`}>
