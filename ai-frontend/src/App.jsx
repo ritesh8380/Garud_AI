@@ -1064,6 +1064,66 @@ function buildCSS(t) {
       color: ${t.text};
       white-space: pre;
     }
+    .md-del {
+      opacity: 0.6;
+      text-decoration: line-through;
+    }
+    .md-hr {
+      border: none;
+      border-top: 1px solid ${t.inputBorder};
+      margin: 6px 0;
+    }
+    .md-blockquote {
+      border-left: 3px solid ${t.avatarBot};
+      padding: 2px 14px;
+      margin: 2px 0;
+      color: ${t.subText};
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .md-blockquote .md-p {
+      margin: 0;
+    }
+    .md-table-wrap {
+      overflow-x: auto;
+      margin: 2px 0;
+      border: 1px solid ${t.inputBorder};
+      border-radius: 10px;
+    }
+    .md-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13.5px;
+    }
+    .md-table th, .md-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid ${t.inputBorder};
+      white-space: nowrap;
+    }
+    .md-table thead th {
+      background: ${t.codeHeadBg};
+      color: ${t.text};
+      font-weight: 600;
+    }
+    .md-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .md-math-block {
+      overflow-x: auto;
+      padding: 10px 4px;
+      margin: 2px 0;
+    }
+    .md-math-inline {
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .md-math-block .katex,
+    .md-math-inline .katex {
+      color: ${t.text};
+      font-size: 1.05em;
+    }
 
     .mode-toggle-wrap {
       position: relative;
