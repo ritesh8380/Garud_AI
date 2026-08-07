@@ -1298,6 +1298,11 @@ function buildCSS(t) {
     .sources-btn:active {
       transform: translateY(0) scale(0.94);
     }
+    .sources-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+      transform: none;
+    }
     .sources-count {
       min-width: 16px;
       height: 16px;
@@ -1310,54 +1315,6 @@ function buildCSS(t) {
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-    .sources-panel {
-      position: absolute;
-      bottom: calc(100% + 8px);
-      left: 0;
-      width: 270px;
-      max-height: 300px;
-      overflow-y: auto;
-      background: ${t.modalBg};
-      border: 1px solid ${t.inputBorder};
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-      padding: 8px;
-      z-index: 20;
-    }
-    .sources-panel-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: ${t.subText};
-      padding: 2px 4px 6px;
-    }
-    .sources-empty {
-      font-size: 12px;
-      color: ${t.subText};
-      padding: 8px 4px;
-    }
-    .sources-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .sources-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border-radius: 8px;
-      border: none;
-      background: transparent;
-      color: ${t.text};
-      cursor: pointer;
-      text-align: left;
-      width: 100%;
-    }
-    .sources-item:hover {
-      background: ${t.chipHoverBg};
     }
     .source-num-badge {
       flex-shrink: 0;
@@ -1373,28 +1330,223 @@ function buildCSS(t) {
       align-items: center;
       justify-content: center;
     }
-    .sources-item-icon {
-      font-size: 13px;
-      flex-shrink: 0;
+
+    /* Floating attachments gallery — a modern subwindow of thumbnail cards */
+    .sources-modal {
+      width: min(640px, 92vw);
+      max-height: 80vh;
+      padding: 20px 20px 16px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
     }
-    .sources-item-name {
-      font-size: 12.5px;
+    .sources-modal-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      margin-bottom: 2px;
+    }
+    .sources-modal-sub {
+      font-size: 12px;
+      color: ${t.subText};
+      margin-bottom: 16px;
+    }
+    .sources-empty {
+      font-size: 13px;
+      color: ${t.subText};
+      padding: 24px 4px;
+      text-align: center;
+    }
+    .attachments-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      overflow-y: auto;
+      padding: 2px 2px 4px;
+    }
+    .attachment-card {
+      position: relative;
+      border: 1px solid ${t.inputBorder};
+      border-radius: 14px;
+      background: ${t.inputBg};
+      overflow: hidden;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .attachment-card:hover {
+      transform: translateY(-2px);
+      border-color: ${t.inputHoverBorder};
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    }
+    .attachment-card .source-num-badge {
+      position: absolute;
+      top: 7px;
+      left: 7px;
+      z-index: 2;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      backdrop-filter: blur(4px);
+    }
+    .attachment-thumb {
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: ${t.codeBg};
+      overflow: hidden;
+      position: relative;
+    }
+    .attachment-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .attachment-thumb-icon {
+      font-size: 28px;
+    }
+    .attachment-thumb-snippet {
+      position: absolute;
+      inset: 0;
+      padding: 8px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 8px;
+      line-height: 1.35;
+      color: ${t.subText};
+      opacity: 0.55;
+      overflow: hidden;
+      white-space: pre-wrap;
+      word-break: break-all;
+      -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 95%);
+      mask-image: linear-gradient(to bottom, black 40%, transparent 95%);
+    }
+    .attachment-preview-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .attachment-card:hover .attachment-preview-hint {
+      opacity: 1;
+    }
+    .attachment-card-body {
+      padding: 8px 10px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .attachment-card-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: ${t.text};
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sources-panel-hint {
+    .attachment-card-meta {
       font-size: 10.5px;
       color: ${t.subText};
-      padding: 8px 4px 2px;
+    }
+    .attachment-use-btn {
+      align-self: flex-start;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid ${t.inputBorder};
+      background: transparent;
+      color: ${t.text};
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .attachment-use-btn:hover {
+      background: rgba(79,140,255,0.15);
+      border-color: #4f8cff;
+      color: #4f8cff;
+    }
+    .sources-modal-hint {
+      font-size: 11px;
+      color: ${t.subText};
+      padding-top: 12px;
+      margin-top: 12px;
       border-top: 1px solid ${t.inputBorder};
-      margin-top: 6px;
       line-height: 1.4;
     }
-    .sources-panel-hint code {
+    .sources-modal-hint code {
       background: ${t.inputBg};
       padding: 1px 4px;
       border-radius: 4px;
+    }
+
+    /* Large single-attachment preview, layered above the gallery */
+    .preview-modal-overlay {
+      z-index: 110;
+    }
+    .preview-modal {
+      width: min(720px, 92vw);
+      max-height: 86vh;
+      padding: 18px 18px 16px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+    }
+    .preview-modal-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-right: 32px;
+    }
+    .preview-modal-name {
+      font-size: 14px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preview-modal-body {
+      flex: 1;
+      overflow: auto;
+      border-radius: 10px;
+      background: ${t.codeBg};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-modal-body img {
+      max-width: 100%;
+      max-height: 68vh;
+      object-fit: contain;
+      display: block;
+      margin: auto;
+    }
+    .preview-modal-body pre {
+      width: 100%;
+      max-height: 68vh;
+      overflow: auto;
+      padding: 14px;
+      margin: 0;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: ${t.text};
+      white-space: pre-wrap;
+      word-break: break-word;
+      text-align: left;
+    }
+    .preview-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1583,6 +1735,21 @@ const MODES = [
   { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
 ];
 
+// Small emoji icon per file type, used on attachment cards that don't have
+// an image thumbnail of their own.
+function fileEmoji(name = "") {
+  const ext = name.split(".").pop().toLowerCase();
+  const map = {
+    js: "📜", jsx: "📜", ts: "📜", tsx: "📜",
+    py: "🐍", json: "🔧", css: "🎨", html: "🌐",
+    md: "📝", txt: "📄", csv: "📊", xlsx: "📊",
+    pdf: "📕", doc: "📘", docx: "📘",
+    java: "☕", c: "🔩", cpp: "🔩", go: "🐹", rb: "💎", php: "🐘",
+    sql: "🗄️", yaml: "⚙️", yml: "⚙️",
+  };
+  return map[ext] || "📄";
+}
+
 // Pulls out attachment numbers the user references in a message, e.g.
 // "summarize #2", "what's in source 3?", "compare file 1 and file 2".
 // Used so a previously uploaded attachment can be pulled back in by number
@@ -1617,6 +1784,7 @@ export default function App() {
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [chatAttachments, setChatAttachments] = useState([]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [convLoading, setConvLoading] = useState(false);
@@ -1628,7 +1796,6 @@ export default function App() {
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
-  const sourcesRef = useRef(null);
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const attachNumRef = useRef(0);
@@ -1666,15 +1833,6 @@ export default function App() {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [modeMenuOpen]);
-
-  useEffect(() => {
-    if (!sourcesOpen) return;
-    const onDocClick = (e) => {
-      if (sourcesRef.current && !sourcesRef.current.contains(e.target)) setSourcesOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [sourcesOpen]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat, loading]);
 
@@ -2062,6 +2220,103 @@ export default function App() {
         </div>
       )}
 
+      {sourcesOpen && (
+        <div className="modal-overlay" onClick={() => setSourcesOpen(false)}>
+          <div className="modal sources-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSourcesOpen(false)}>✕</button>
+            <div className="sources-modal-title">Attachments in this chat</div>
+            <div className="sources-modal-sub">Tap a card to preview it large, or "Use" to reference it by number.</div>
+            {chatAttachments.length === 0 ? (
+              <div className="sources-empty">No files attached yet.</div>
+            ) : (
+              <div className="attachments-grid">
+                {chatAttachments.map(a => (
+                  <div
+                    key={a.num}
+                    className="attachment-card"
+                    onClick={() => setPreviewAttachment(a)}
+                    title={`Preview ${a.name}`}
+                  >
+                    <span className="source-num-badge">#{a.num}</span>
+                    <div className="attachment-thumb">
+                      {a.type === "image" && a.dataUrl ? (
+                        <img src={a.dataUrl} alt={a.name} />
+                      ) : (
+                        <>
+                          {a.content && (
+                            <span className="attachment-thumb-snippet">{a.content.slice(0, 400)}</span>
+                          )}
+                          <span className="attachment-thumb-icon">{a.type === "image" ? "🖼️" : fileEmoji(a.name)}</span>
+                        </>
+                      )}
+                      <div className="attachment-preview-hint">🔍 Preview</div>
+                    </div>
+                    <div className="attachment-card-body">
+                      <div className="attachment-card-name">{a.name}</div>
+                      <div className="attachment-card-meta">{a.type === "image" ? "Image" : a.legacy ? "Older attachment" : "Text / code"}</div>
+                      <button
+                        type="button"
+                        className="attachment-use-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setText(prev => (prev.trim() ? prev.trimEnd() + ` #${a.num} ` : `#${a.num} `));
+                          setSourcesOpen(false);
+                          textareaRef.current?.focus();
+                        }}
+                      >
+                        Use #{a.num}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="sources-modal-hint">
+              Type <code>#2</code> (or "source 2") in your message to ask about that file directly — no need to re-upload it.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewAttachment && (
+        <div className="modal-overlay preview-modal-overlay" onClick={() => setPreviewAttachment(null)}>
+          <div className="modal preview-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setPreviewAttachment(null)}>✕</button>
+            <div className="preview-modal-head">
+              <span className="source-num-badge" style={{ position: "static" }}>#{previewAttachment.num}</span>
+              <span className="preview-modal-name">{previewAttachment.name}</span>
+            </div>
+            <div className="preview-modal-body">
+              {previewAttachment.type === "image" && previewAttachment.dataUrl ? (
+                <img src={previewAttachment.dataUrl} alt={previewAttachment.name} />
+              ) : previewAttachment.content ? (
+                <pre>{previewAttachment.content}</pre>
+              ) : (
+                <div className="sources-empty">
+                  {previewAttachment.legacy
+                    ? "This file was attached before previews were saved, so its content isn't available anymore."
+                    : "No preview available for this file."}
+                </div>
+              )}
+            </div>
+            <div className="preview-modal-footer">
+              <button
+                type="button"
+                className="attachment-use-btn"
+                onClick={() => {
+                  setText(prev => (prev.trim() ? prev.trimEnd() + ` #${previewAttachment.num} ` : `#${previewAttachment.num} `));
+                  setPreviewAttachment(null);
+                  setSourcesOpen(false);
+                  textareaRef.current?.focus();
+                }}
+              >
+                Use #{previewAttachment.num} in message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="app-layout">
         {sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -2254,49 +2509,16 @@ export default function App() {
             >
               📎
             </button>
-            <div className="sources-wrap" ref={sourcesRef}>
-              <button
-                type="button"
-                className="sources-btn"
-                title="Attachments in this chat"
-                onClick={() => setSourcesOpen(v => !v)}
-                disabled={chatAttachments.length === 0}
-              >
-                🗂️
-                {chatAttachments.length > 0 && <span className="sources-count">{chatAttachments.length}</span>}
-              </button>
-              {sourcesOpen && (
-                <div className="sources-panel">
-                  <div className="sources-panel-title">Attachments in this chat</div>
-                  {chatAttachments.length === 0 ? (
-                    <div className="sources-empty">No files attached yet.</div>
-                  ) : (
-                    <div className="sources-list">
-                      {chatAttachments.map(a => (
-                        <button
-                          key={a.num}
-                          type="button"
-                          className="sources-item"
-                          title={`Insert a reference to #${a.num} in your message`}
-                          onClick={() => {
-                            setText(prev => (prev.trim() ? prev.trimEnd() + ` #${a.num} ` : `#${a.num} `));
-                            setSourcesOpen(false);
-                            textareaRef.current?.focus();
-                          }}
-                        >
-                          <span className="source-num-badge">#{a.num}</span>
-                          <span className="sources-item-icon">{a.type === "image" ? "🖼️" : "📄"}</span>
-                          <span className="sources-item-name">{a.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="sources-panel-hint">
-                    Type <code>#2</code> (or "source 2") in your message to ask about that file directly — no need to re-upload it.
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              className="sources-btn"
+              title="Attachments in this chat"
+              onClick={() => setSourcesOpen(true)}
+              disabled={chatAttachments.length === 0}
+            >
+              🗂️
+              {chatAttachments.length > 0 && <span className="sources-count">{chatAttachments.length}</span>}
+            </button>
             <textarea
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
