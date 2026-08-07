@@ -185,8 +185,8 @@ function buildCSS(t) {
     .md-code-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; background: ${t.codeHeadBg}; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: ${t.subText}; text-transform: lowercase; }
     .md-copy-btn { background: transparent; border: 1px solid ${t.inputBorder}; color: ${t.subText}; font-family: 'Inter', sans-serif; font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s; }
     .md-copy-btn:hover { background: ${t.inputBg}; color: ${t.text}; }
-    .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: ${t.codeBg}; }
-    .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre; }
+    .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: hidden; background: ${t.codeBg}; }
+    .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
     .tok-keyword { color: ${t.tokKeyword}; font-weight: 600; }
     .tok-string { color: ${t.tokString}; }
     .tok-comment { color: ${t.tokComment}; font-style: italic; }
