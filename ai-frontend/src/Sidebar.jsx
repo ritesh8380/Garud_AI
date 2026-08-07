@@ -13,11 +13,6 @@ const TrashIcon = () => (
   </svg>
 );
 
-// Sidebar lists every saved conversation for the signed-in user. Unstarred
-// conversations are auto-deleted server-side after an hour of inactivity
-// (see supabase_schema.sql); starring is the user's way to keep one around
-// permanently until they delete it themselves. The star badge at the top
-// doubles as a filter: click it to see only starred chats.
 export default function Sidebar({
   t,
   conversations,
