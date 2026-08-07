@@ -22,6 +22,8 @@ const DARK = {
   chipBg: "transparent", chipBorder: "#3a3a3a", chipHoverBg: "#2f2f2f",
   modalBg: "#2f2f2f", modalOverlay: "rgba(0,0,0,0.8)", scrollThumb: "#3a3a3a",
   topbarBorder: "#2a2a2a", codeBg: "#181818", codeHeadBg: "#242424",
+  tokKeyword: "#c586c0", tokString: "#ce9178", tokComment: "#6a9955",
+  tokNumber: "#b5cea8", tokFunc: "#dcdcaa", tokPre: "#569cd6",
 };
 
 const LIGHT = {
@@ -33,6 +35,8 @@ const LIGHT = {
   chipBg: "transparent", chipBorder: "#e5e5e5", chipHoverBg: "#f4f4f5",
   modalBg: "#f4f4f5", modalOverlay: "rgba(0,0,0,0.4)", scrollThumb: "#e5e5e5",
   topbarBorder: "#f0f0f0", codeBg: "#f6f6f7", codeHeadBg: "#ececee",
+  tokKeyword: "#af00db", tokString: "#a31515", tokComment: "#008000",
+  tokNumber: "#098658", tokFunc: "#795e26", tokPre: "#0000ff",
 };
 
 function buildCSS(t) {
@@ -71,10 +75,8 @@ function buildCSS(t) {
     .sidebar-icon-btn.starred { color: #f5b942; }
     .sidebar-note { padding: 10px 14px; font-size: 10.5px; color: ${t.dimText}; text-align: center; border-top: 1px solid ${t.topbarBorder}; letter-spacing: 0.02em; }
     .sidebar-toggle-btn { display: flex; }
-    .sidebar-backdrop { display: none; }
     @media (max-width: 860px) {
-      .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); max-width: 82vw; }
-      .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 25; animation: fadeO 0.2s both; }
+      .sidebar { position: fixed; top: 0; left: 0; z-index: 30; box-shadow: 0 0 40px rgba(0,0,0,0.3); }
     }
     .splash { height: 100vh; display: flex; align-items: center; justify-content: center; background: ${t.bg}; }
     .splash-eagle { font-size: 40px; animation: pulseScale 1.4s ease-in-out infinite; }
@@ -120,19 +122,17 @@ function buildCSS(t) {
     @keyframes avatarPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .bot-content { flex: 1; font-size: 15px; line-height: 1.78; color: ${t.assistantText}; word-break: break-word; padding-top: 1px; transition: color 0.3s; min-width: 0; }
     .bot-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-    .msg-actions { display: flex; flex-direction: row; gap: 6px; align-self: flex-start; }
     .speak-btn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease; align-self: flex-start; }
     .speak-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
     .speak-btn:active { transform: translateY(0) scale(0.94); }
     .speak-btn.speaking { color: ${t.avatarBot}; border-color: ${t.avatarBot}55; background: ${t.avatarBot}14; }
-    .speak-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
     .typing-block { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0; animation: mIn 0.25s ease both; }
     .typing-dots { display: flex; gap: 4px; align-items: center; padding-top: 5px; }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.subText}; animation: blink 1.4s ease-in-out infinite; }
     .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
     @keyframes blink { 0%,60%,100%{opacity:.15;transform:scale(.85)} 30%{opacity:1;transform:scale(1)} }
     .input-wrapper { width: 100%; padding: 10px 24px 20px; }
-    .input-box { position: relative; background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
+    .input-box { background: ${t.inputBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; padding: 12px 12px 12px 18px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s ease, background 0.3s, box-shadow 0.2s ease; }
     .input-box:focus-within { border-color: ${t.inputHoverBorder}; box-shadow: 0 0 0 3px ${t.avatarBot}14; }
     textarea { flex: 1; background: none; border: none; outline: none; color: ${t.text}; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; resize: none; min-height: 24px; max-height: 180px; overflow-y: auto; caret-color: ${t.text}; transition: color 0.3s; }
     textarea::placeholder { color: ${t.dimText}; }
@@ -140,8 +140,6 @@ function buildCSS(t) {
     .send-btn:hover:not(:disabled) { opacity: 0.82; transform: translateY(-1px); }
     .send-btn:active:not(:disabled) { transform: scale(0.92); }
     .send-btn:disabled { background: ${t.sendBtnDisabled}; color: ${t.subText}; cursor: not-allowed; opacity: 0.5; }
-    .send-btn.stop-mode { background: #ef4444; color: #fff; opacity: 1; cursor: pointer; }
-    .send-btn.stop-mode:hover { opacity: 0.85; }
     .status-badge { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid ${t.inputBorder}; background: transparent; font-family: 'Inter', sans-serif; font-size: 12px; color: ${t.subText}; }
     .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transition: background 0.4s, box-shadow 0.4s; }
     .sdot.online { background: #10a37f; box-shadow: 0 0 6px #10a37f99; animation: spulse 2.5s ease-in-out infinite; }
@@ -189,26 +187,31 @@ function buildCSS(t) {
     .md-copy-btn:hover { background: ${t.inputBg}; color: ${t.text}; }
     .md-code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: ${t.codeBg}; }
     .md-code-block code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; color: ${t.text}; white-space: pre; }
+    .tok-keyword { color: ${t.tokKeyword}; font-weight: 600; }
+    .tok-string { color: ${t.tokString}; }
+    .tok-comment { color: ${t.tokComment}; font-style: italic; }
+    .tok-number { color: ${t.tokNumber}; }
+    .tok-func { color: ${t.tokFunc}; }
+    .tok-pre { color: ${t.tokPre}; }
 
-    /* Mode switcher: one compact toggle button; tapping it slides a
-       horizontal strip of every mode up above the whole chat bar so people
-       can compare and pick, instead of hunting through a stacked menu. */
-    .mode-toggle-wrap { position: relative; flex-shrink: 0; }
-    .mode-toggle-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; color: ${t.text}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease; animation: modeGlow 2.6s ease-in-out infinite; }
-    .mode-toggle-btn:hover { transform: translateY(-2px); }
-    .mode-toggle-btn:active { transform: translateY(0) scale(0.94); }
-    .mode-toggle-btn.open { transform: scale(0.92); opacity: 0.85; }
-    @keyframes modeGlow { 0%,100% { box-shadow: 0 0 0 3px var(--glow), 0 0 8px var(--glow), 0 2px 8px rgba(0,0,0,0.2); } 50% { box-shadow: 0 0 0 3px var(--glow), 0 0 16px var(--glow), 0 2px 8px rgba(0,0,0,0.2); } }
-    .mode-row { position: absolute; left: 0; right: 0; bottom: calc(100% + 12px); display: flex; gap: 8px; overflow-x: auto; padding: 10px; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.3); animation: modeRowIn 0.2s cubic-bezier(.2,.8,.3,1) both; z-index: 6; }
-    .mode-row::-webkit-scrollbar { height: 4px; }
-    .mode-row::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
-    @keyframes modeRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-    .mode-row-item { flex: 1 0 auto; min-width: 78px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 10px; border-radius: 12px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease; }
-    .mode-row-item:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-2px); }
-    .mode-row-item:active { transform: translateY(0) scale(0.96); }
-    .mode-row-item.active { color: ${t.text}; border-color: transparent; box-shadow: 0 0 0 2px var(--glow), 0 0 14px var(--glow); }
-    .mode-row-icon { font-size: 19px; line-height: 1; }
-    .mode-row-label { font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+    /* Mode switcher: stacked toggle embedded in the message input row */
+    .mode-fab { position: relative; flex-shrink: 0; }
+    .mode-options { position: absolute; bottom: 44px; left: 0; display: flex; flex-direction: column-reverse; gap: 8px; z-index: 5; }
+    .mode-option { position: relative; width: 34px; height: 34px; border-radius: 50%; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; color: ${t.text}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both; transition: transform 0.15s ease, box-shadow 0.2s ease; }
+    .mode-option:hover { transform: translateY(-2px) scale(1.06); }
+    .mode-option:active { transform: translateY(0) scale(0.94); }
+    .mode-option.active { box-shadow: 0 0 0 3px var(--glow), 0 0 14px var(--glow), 0 6px 18px rgba(0,0,0,0.28); animation: modePop 0.22s cubic-bezier(.34,1.56,.64,1) both, modeGlow 2.2s ease-in-out infinite; }
+    @keyframes modePop { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
+    @keyframes modeGlow { 0%,100% { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } 50% { box-shadow: 0 0 0 3px var(--glow), 0 0 22px var(--glow), 0 6px 18px rgba(0,0,0,0.28); } }
+    .mode-option-tip { position: absolute; left: 42px; top: 50%; transform: translateY(-50%); font-size: 11px; white-space: nowrap; background: ${t.modalBg}; border: 1px solid ${t.inputBorder}; padding: 4px 9px; border-radius: 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+    .mode-option:hover .mode-option-tip { opacity: 1; }
+    .mode-stack { position: relative; width: 34px; height: 34px; cursor: pointer; }
+    .mode-stack-circle { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid ${t.inputBorder}; background: ${t.modalBg}; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .mode-stack-circle.back { transform: translate(4px, 4px) scale(0.9); opacity: 0.5; font-size: 13px; }
+    .mode-stack-circle.front { box-shadow: 0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 2px 8px rgba(0,0,0,0.2); }
+    .mode-stack:hover .mode-stack-circle.front { transform: translateY(-2px); }
+    .mode-stack.open .mode-stack-circle.front { transform: scale(0); opacity: 0; }
+    .mode-stack.open .mode-stack-circle.back { transform: scale(0); opacity: 0; }
 
     .attach-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid ${t.inputBorder}; background: transparent; color: ${t.subText}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease; }
     .attach-btn:hover { background: ${t.inputBg}; color: ${t.text}; transform: translateY(-1px); }
@@ -224,44 +227,7 @@ function buildCSS(t) {
 
     @media (prefers-reduced-motion: reduce) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
-      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-toggle-btn, .mode-row, .mode-row-item { animation: none !important; transition: none !important; }
-    }
-
-    /* Tablet & phone: tighter chrome so the chat itself stays the focus */
-    @media (max-width: 860px) {
-      .topbar { padding: 10px 14px; }
-      .conversation { padding: 20px 14px 12px; }
-      .input-wrapper { padding: 8px 14px 16px; }
-      .welcome-title { font-size: 24px; }
-      .welcome-eagle { font-size: 42px; margin-bottom: 14px; }
-      .user-pill { max-width: 85%; }
-      .msg-block.bot { gap: 10px; }
-      .dev-btn { padding: 0 12px; font-size: 11.5px; }
-      .topbar-right { gap: 6px; }
-      .modal { width: min(300px, 88vw); }
-      .account-menu { width: min(220px, 80vw); }
-    }
-
-    /* Small phones: drop secondary chrome so nothing wraps or overflows */
-    @media (max-width: 480px) {
-      .topbar { padding: 8px 10px; }
-      .brand-name { display: none; }
-      .status-label { display: none; }
-      .status-badge { padding: 0 8px; height: 28px; gap: 0; }
-      .icon-btn, .avatar-btn { width: 30px; height: 30px; }
-      .dev-btn { padding: 0 9px; }
-      .conversation { padding: 16px 10px 8px; }
-      .msg-block { padding: 14px 0; }
-      .user-pill { max-width: 90%; padding: 10px 14px; font-size: 14px; }
-      .bot-content, textarea { font-size: 14.5px; }
-      .input-wrapper { padding: 8px 10px 14px; }
-      .input-box { padding: 10px 10px 10px 14px; gap: 6px; }
-      .mode-toggle-btn, .attach-btn, .send-btn { width: 32px; height: 32px; }
-      .mode-row-item { min-width: 66px; padding: 8px 6px; }
-      .mode-row-icon { font-size: 17px; }
-      .mode-row-label { font-size: 10px; }
-      .welcome-title { font-size: 21px; }
-      .chip { padding: 8px 14px; font-size: 12.5px; }
+      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-option, .mode-stack-circle { animation: none !important; transition: none !important; }
     }
   `;
 }
@@ -286,33 +252,6 @@ const StopIcon = () => (
   </svg>
 );
 
-const CopyIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2"/>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-
-const RegenerateIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="1 4 1 10 7 10"/>
-    <polyline points="23 20 23 14 17 14"/>
-    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
-  </svg>
-);
-
-const StopSquareIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <rect x="5" y="5" width="14" height="14" rx="3"/>
-  </svg>
-);
-
 // Strips markdown syntax so the speech engine reads clean prose instead of
 // literal asterisks, backticks, hashes, and bullet markers.
 function stripMarkdownForSpeech(text) {
@@ -334,7 +273,6 @@ function stripMarkdownForSpeech(text) {
 const CHIPS = ["Who are you?", "What can you help with?", "Tell me something interesting", "Help me write something"];
 
 const MODES = [
-  { id: "normal", label: "Normal Mode", icon: "😊", glow: "#f5b942" },
   { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
   { id: "love", label: "Love Mode", icon: "❤️", glow: "#ff4f81" },
   { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
@@ -352,26 +290,18 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
-  const [copiedIndex, setCopiedIndex] = useState(null);
-  const [mode, setMode] = useState("normal");
+  const [mode, setMode] = useState("education");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [convLoading, setConvLoading] = useState(false);
   const [showStarredOnly, setShowStarredOnly] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth > 860 : true));
-  // On phones the sidebar is an overlay, not a rail — closing it after picking
-  // a chat (or starting a new one) keeps the conversation in view instead of
-  // leaving the list covering the screen. No-op on wider layouts.
-  const closeSidebarOnMobile = () => {
-    if (typeof window !== "undefined" && window.innerWidth <= 860) setSidebarOpen(false);
-  };
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
   const fileInputRef = useRef(null);
-  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -469,7 +399,7 @@ export default function App() {
   const openConversation = async (conv) => {
     if (loading) return;
     setActiveConversationId(conv.id);
-    setMode(conv.mode || "normal");
+    setMode(conv.mode || "education");
     setSpeakingIndex(null);
     window.speechSynthesis?.cancel();
     setConvLoading(true);
@@ -503,53 +433,6 @@ export default function App() {
     }
   };
 
-  // Shared network call so both a fresh send and a regenerate can reuse the
-  // exact same request shape. Wires up an AbortController so the "stop"
-  // button can cancel an in-flight generation.
-  const requestReply = async (msg, images, textFiles) => {
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    let res;
-    if (images.length > 0) {
-      const filesNote = textFiles.length > 0
-        ? `\n\nAlso attached (as text/code):\n` + textFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")
-        : "";
-      res = await fetch("https://garud-ai.onrender.com/vision-chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({ message: msg + filesNote, images }),
-        signal: controller.signal,
-      });
-    } else {
-      res = await fetch("https://garud-ai.onrender.com/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          message: msg,
-          mode,
-          files: textFiles.map(f => ({ name: f.name, content: f.content })),
-        }),
-        signal: controller.signal,
-      });
-    }
-    if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-    const data = await res.json();
-    return data.reply ?? "Sorry, I didn't get a valid response.";
-  };
-
-  // Cancels whatever request is currently in flight (used by the stop
-  // button that replaces the send button while a reply is generating).
-  const stopGenerating = () => {
-    abortControllerRef.current?.abort();
-  };
-
   const send = async (msgOverride) => {
     const msg = (msgOverride || text).trim();
     const filesToSend = attachedFiles;
@@ -571,20 +454,46 @@ export default function App() {
       }
     }
 
-    const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
-    const textFiles = filesToSend.filter(f => f.type !== "image").map(f => ({ name: f.name, content: f.content }));
-
-    // Stash the raw request payload on the user bubble (not just filenames)
-    // so a later "regenerate" on the following bot reply can replay the
-    // exact same question, images, and files.
-    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name), _images: images, _textFiles: textFiles }]);
+    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name) }]);
     setText("");
     setAttachedFiles([]);
     setLoading(true);
     if (convId) saveMessage(convId, "user", msg, filesToSend.map(f => f.name)).catch(() => {});
 
     try {
-      const replyText = await requestReply(msg, images, textFiles);
+      const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
+      const textFiles = filesToSend.filter(f => f.type !== "image");
+
+      let res;
+      if (images.length > 0) {
+        const filesNote = textFiles.length > 0
+          ? `\n\nAlso attached (as text/code):\n` + textFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")
+          : "";
+        res = await fetch("https://garud-ai.onrender.com/vision-chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ message: msg + filesNote, images }),
+        });
+      } else {
+        res = await fetch("https://garud-ai.onrender.com/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: msg,
+            mode,
+            files: textFiles.map(f => ({ name: f.name, content: f.content })),
+          }),
+        });
+      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+      const data = await res.json();
+      const replyText = data.reply ?? "Sorry, I didn't get a valid response.";
       setChat(p => [...p, { type: "bot", text: replyText }]);
       if (convId) {
         saveMessage(convId, "bot", replyText).catch(() => {});
@@ -594,66 +503,17 @@ export default function App() {
           return updated.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
         });
       }
-    } catch (err) {
-      if (err.name === "AbortError") {
-        setChat(p => [...p, { type: "bot", text: "⏹ Generation stopped." }]);
-      } else {
-        setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
-      }
+    } catch {
+      setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
       setLoading(false);
-      abortControllerRef.current = null;
       setTimeout(() => textareaRef.current?.focus(), 50);
-    }
-  };
-
-  // Re-runs the request behind a bot reply (by its index in `chat`) and
-  // swaps that reply in place, so an accidental send or a flaky response
-  // can be redone without retyping the question or duplicating the thread.
-  const regenerate = async (botIndex) => {
-    if (loading) return;
-    let uIdx = botIndex - 1;
-    while (uIdx >= 0 && chat[uIdx].type !== "user") uIdx--;
-    if (uIdx < 0) return;
-    const userMsg = chat[uIdx];
-    const convId = activeConversationId;
-
-    setLoading(true);
-    try {
-      const replyText = await requestReply(userMsg.text, userMsg._images || [], userMsg._textFiles || []);
-      setChat(p => {
-        const next = [...p];
-        next[botIndex] = { type: "bot", text: replyText };
-        return next;
-      });
-      if (convId) saveMessage(convId, "bot", replyText).catch(() => {});
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        setChat(p => {
-          const next = [...p];
-          next[botIndex] = { type: "bot", text: "Could not reach the server. Please try again." };
-          return next;
-        });
-      }
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
     }
   };
 
   useEffect(() => {
     return () => { window.speechSynthesis?.cancel(); };
   }, []);
-
-  const copyMessage = async (index, rawText) => {
-    try {
-      await navigator.clipboard.writeText(rawText);
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(i => (i === index ? null : i)), 1500);
-    } catch {
-      /* clipboard may be unavailable, fail silently */
-    }
-  };
 
   const toggleSpeak = (index, rawText) => {
     if (!("speechSynthesis" in window)) {
@@ -757,15 +617,12 @@ export default function App() {
       )}
 
       <div className="app-layout">
-        {sidebarOpen && (
-          <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
-        )}
         <Sidebar
           t={t}
           conversations={conversations}
           activeId={activeConversationId}
-          onSelect={(c) => { openConversation(c); closeSidebarOnMobile(); }}
-          onNew={() => { startNewChat(); closeSidebarOnMobile(); }}
+          onSelect={openConversation}
+          onNew={startNewChat}
           onToggleStar={handleToggleStar}
           onDelete={handleDeleteConversation}
           showStarredOnly={showStarredOnly}
@@ -782,7 +639,7 @@ export default function App() {
           <div className="topbar-right">
             <div className="status-badge">
               <span className={`sdot ${isOnline ? "online" : "offline"}`} />
-              <span className="status-label">{isOnline ? "online" : "offline"}</span>
+              {isOnline ? "online" : "offline"}
             </div>
             <button className="icon-btn" onClick={() => setIsDark(d => !d)}>{isDark ? "☀️" : "🌙"}</button>
             <button className="dev-btn" onClick={() => setShowDev(true)}>Developer</button>
@@ -830,33 +687,14 @@ export default function App() {
                   <div className="bot-avatar">🦅</div>
                   <div className="bot-wrap">
                     <div className="bot-content"><FormattedMessage text={m.text} /></div>
-                    <div className="msg-actions">
-                      <button
-                        className={`speak-btn ${speakingIndex === i ? "speaking" : ""}`}
-                        onClick={() => toggleSpeak(i, m.text)}
-                        title={speakingIndex === i ? "Stop reading" : "Read aloud"}
-                        type="button"
-                      >
-                        {speakingIndex === i ? <StopIcon /> : <SpeakerIcon />}
-                      </button>
-                      <button
-                        className={`speak-btn ${copiedIndex === i ? "speaking" : ""}`}
-                        onClick={() => copyMessage(i, m.text)}
-                        title={copiedIndex === i ? "Copied" : "Copy reply"}
-                        type="button"
-                      >
-                        {copiedIndex === i ? <CheckIcon /> : <CopyIcon />}
-                      </button>
-                      <button
-                        className="speak-btn"
-                        onClick={() => regenerate(i)}
-                        title="Regenerate reply"
-                        type="button"
-                        disabled={loading}
-                      >
-                        <RegenerateIcon />
-                      </button>
-                    </div>
+                    <button
+                      className={`speak-btn ${speakingIndex === i ? "speaking" : ""}`}
+                      onClick={() => toggleSpeak(i, m.text)}
+                      title={speakingIndex === i ? "Stop reading" : "Read aloud"}
+                      type="button"
+                    >
+                      {speakingIndex === i ? <StopIcon /> : <SpeakerIcon />}
+                    </button>
                   </div>
                 </>
               )}
@@ -890,50 +728,62 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="input-box" ref={modeRef}>
-            {modeMenuOpen && (
-              <div className="mode-row">
-                {MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={`mode-row-item ${mode === m.id ? "active" : ""}`}
-                    style={{ "--glow": m.glow }}
-                    onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
-                  >
-                    <span className="mode-row-icon">{m.icon}</span>
-                    <span className="mode-row-label">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="mode-toggle-wrap">
-              <button
-                type="button"
-                className={`mode-toggle-btn ${modeMenuOpen ? "open" : ""}`}
-                style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
+          <div className="input-box">
+            <div className="mode-fab" ref={modeRef}>
+              {modeMenuOpen && (
+                <div className="mode-options">
+                  {MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`mode-option ${mode === m.id ? "active" : ""}`}
+                      style={{ "--glow": m.glow }}
+                      onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
+                    >
+                      {m.icon}
+                      <span className="mode-option-tip">{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div
+                className={`mode-stack ${modeMenuOpen ? "open" : ""}`}
                 onClick={() => setModeMenuOpen(v => !v)}
-                title={`Mode: ${(MODES.find(m => m.id === mode) || MODES[0]).label} — tap to switch`}
               >
-                {(MODES.find(m => m.id === mode) || MODES[0]).icon}
-              </button>
+                <div
+                  className="mode-stack-circle back"
+                  style={{ "--glow": (MODES.find(m => m.id !== mode) || MODES[0]).glow }}
+                >
+                  {(MODES.find(m => m.id !== mode) || MODES[0]).icon}
+                </div>
+                <div
+                  className="mode-stack-circle front"
+                  style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
+                >
+                  {(MODES.find(m => m.id === mode) || MODES[0]).icon}
+                </div>
+              </div>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".js,.jsx,.ts,.tsx,.py,.html,.css,.json,.md,.txt,.java,.c,.cpp,.go,.rb,.php,.sql,.yaml,.yml,.png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.csv,.xlsx"
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
-            <button
-              type="button"
-              className="attach-btn"
-              title="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              📎
-            </button>
+            {mode === "developer" && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".js,.jsx,.ts,.tsx,.py,.html,.css,.json,.md,.txt,.java,.c,.cpp,.go,.rb,.php,.sql,.yaml,.yml"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+                <button
+                  type="button"
+                  className="attach-btn"
+                  title="Attach code files for review"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  📎
+                </button>
+              </>
+            )}
             <textarea
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
@@ -941,13 +791,8 @@ export default function App() {
               placeholder={mode === "developer" ? "Paste code or attach files to review…" : "Message Garuda AI"}
               disabled={loading} autoFocus
             />
-            <button
-              className={`send-btn ${loading ? "stop-mode" : ""}`}
-              onClick={() => (loading ? stopGenerating() : send())}
-              disabled={!loading && !hasText}
-              title={loading ? "Stop generating" : "Send"}
-            >
-              {loading ? <StopSquareIcon /> : <SendIcon />}
+            <button className="send-btn" onClick={() => send()} disabled={!hasText || loading}>
+              <SendIcon />
             </button>
           </div>
           <div className="hint">Garuda AI · garud-ai.onrender.com · Shift+Enter for new line</div>
