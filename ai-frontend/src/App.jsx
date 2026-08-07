@@ -1254,6 +1254,147 @@ function buildCSS(t) {
       border-radius: 7px;
       background: rgba(255,255,255,0.12);
       color: ${t.userText};
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .msg-file-chip .source-num-badge {
+      background: rgba(255,255,255,0.22);
+      color: ${t.userText};
+    }
+    .msg-referenced {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    .sources-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .sources-btn {
+      height: 34px;
+      min-width: 34px;
+      padding: 0 9px;
+      border-radius: 10px;
+      border: 1px solid ${t.inputBorder};
+      background: transparent;
+      color: ${t.subText};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      font-size: 14px;
+      flex-shrink: 0;
+      transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+    }
+    .sources-btn:hover {
+      background: ${t.inputBg};
+      color: ${t.text};
+      transform: translateY(-1px);
+    }
+    .sources-btn:active {
+      transform: translateY(0) scale(0.94);
+    }
+    .sources-count {
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #4f8cff;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sources-panel {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      width: 270px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: ${t.modalBg};
+      border: 1px solid ${t.inputBorder};
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+      padding: 8px;
+      z-index: 20;
+    }
+    .sources-panel-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: ${t.subText};
+      padding: 2px 4px 6px;
+    }
+    .sources-empty {
+      font-size: 12px;
+      color: ${t.subText};
+      padding: 8px 4px;
+    }
+    .sources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sources-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: ${t.text};
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+    .sources-item:hover {
+      background: ${t.chipHoverBg};
+    }
+    .source-num-badge {
+      flex-shrink: 0;
+      min-width: 22px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(79,140,255,0.15);
+      color: #4f8cff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sources-item-icon {
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .sources-item-name {
+      font-size: 12.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sources-panel-hint {
+      font-size: 10.5px;
+      color: ${t.subText};
+      padding: 8px 4px 2px;
+      border-top: 1px solid ${t.inputBorder};
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .sources-panel-hint code {
+      background: ${t.inputBg};
+      padding: 1px 4px;
+      border-radius: 4px;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1442,6 +1583,22 @@ const MODES = [
   { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
 ];
 
+// Pulls out attachment numbers the user references in a message, e.g.
+// "summarize #2", "what's in source 3?", "compare file 1 and file 2".
+// Used so a previously uploaded attachment can be pulled back in by number
+// instead of re-uploading it (and without re-sending every other file).
+function extractReferencedNums(msg) {
+  if (!msg) return [];
+  const nums = new Set();
+  const re = /#(\d+)\b|\b(?:sources?|files?|attachments?)\s*#?(\d+)\b/gi;
+  let match;
+  while ((match = re.exec(msg))) {
+    const n = Number(match[1] || match[2]);
+    if (n > 0) nums.add(n);
+  }
+  return [...nums];
+}
+
 export default function App() {
   const [text, setText] = useState("");
   const [chat, setChat] = useState([]);
@@ -1458,6 +1615,8 @@ export default function App() {
   const [mode, setMode] = useState("normal");
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [chatAttachments, setChatAttachments] = useState([]);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [convLoading, setConvLoading] = useState(false);
@@ -1469,8 +1628,10 @@ export default function App() {
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const modeRef = useRef(null);
+  const sourcesRef = useRef(null);
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const attachNumRef = useRef(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -1505,6 +1666,15 @@ export default function App() {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [modeMenuOpen]);
+
+  useEffect(() => {
+    if (!sourcesOpen) return;
+    const onDocClick = (e) => {
+      if (sourcesRef.current && !sourcesRef.current.contains(e.target)) setSourcesOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [sourcesOpen]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat, loading]);
 
@@ -1544,17 +1714,33 @@ export default function App() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     const results = await Promise.all(files.map(readFile));
-    setAttachedFiles(prev => [...prev, ...results]);
+    // Give every successfully-read file a stable, chat-unique number so it
+    // can be looked up later from the sources panel or referenced inline
+    // (e.g. "#3") without re-uploading it.
+    const numbered = results.map(r => (r.error ? r : { ...r, num: ++attachNumRef.current }));
+    setAttachedFiles(prev => [...prev, ...numbered]);
+    setChatAttachments(prev => [...prev, ...numbered.filter(r => !r.error)]);
     e.target.value = "";
   };
 
-  const removeFile = (idx) => setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeFile = (idx) => {
+    const removed = attachedFiles[idx];
+    setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+    // Also drop it from the chat's attachment library — it was only added
+    // speculatively when picked, and was never actually sent/saved.
+    if (removed && removed.num != null) {
+      setChatAttachments(prev => prev.filter(a => a.num !== removed.num));
+    }
+  };
 
   const startNewChat = () => {
     setActiveConversationId(null);
     setChat([]);
     setText("");
     setAttachedFiles([]);
+    setChatAttachments([]);
+    setSourcesOpen(false);
+    attachNumRef.current = 0;
     setSpeakingIndex(null);
     window.speechSynthesis?.cancel();
   };
@@ -1564,13 +1750,37 @@ export default function App() {
     setActiveConversationId(conv.id);
     setMode(conv.mode || "normal");
     setSpeakingIndex(null);
+    setSourcesOpen(false);
     window.speechSynthesis?.cancel();
     setConvLoading(true);
     try {
       const msgs = await listMessages(conv.id);
-      setChat(msgs.map(m => ({ type: m.type, text: m.text, files: m.files || [] })));
+      const chatMsgs = msgs.map(m => ({ type: m.type, text: m.text, files: m.files || [] }));
+      setChat(chatMsgs);
+
+      // Rebuild this chat's attachment library from its message history so
+      // the source numbers stay stable across reloads/reopens. Supports
+      // both the new object-shaped files and older messages that only
+      // stored plain filename strings.
+      let counter = 0;
+      const lib = [];
+      for (const m of chatMsgs) {
+        for (const f of m.files || []) {
+          counter += 1;
+          if (f && typeof f === "object") {
+            lib.push({ ...f, num: counter });
+          } else {
+            lib.push({ num: counter, name: String(f), type: "text", legacy: true });
+          }
+        }
+      }
+      setChatAttachments(lib);
+      setAttachedFiles([]);
+      attachNumRef.current = counter;
     } catch {
       setChat([]);
+      setChatAttachments([]);
+      attachNumRef.current = 0;
     } finally {
       setConvLoading(false);
     }
@@ -1639,7 +1849,20 @@ export default function App() {
   const send = async (msgOverride) => {
     const msg = (msgOverride || text).trim();
     const filesToSend = attachedFiles;
-    if (!msg && filesToSend.length === 0) return;
+
+    // If the message points at earlier attachments by number (e.g. "#2" or
+    // "source 3"), pull just those files back in from this chat's library
+    // instead of the user having to re-upload them — and without dragging
+    // in every other file that's ever been attached in this chat.
+    const alreadyStagedNums = new Set(filesToSend.map(f => f.num).filter(Boolean));
+    const referencedNums = extractReferencedNums(msg);
+    const referencedFiles = referencedNums
+      .filter(n => !alreadyStagedNums.has(n))
+      .map(n => chatAttachments.find(a => a.num === n))
+      .filter(Boolean);
+
+    const allFilesForRequest = [...filesToSend, ...referencedFiles];
+    if (!msg && allFilesForRequest.length === 0) return;
     if (loading) return;
 
     let convId = activeConversationId;
@@ -1653,14 +1876,26 @@ export default function App() {
       } catch {}
     }
 
-    const images = filesToSend.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
-    const textFiles = filesToSend.filter(f => f.type !== "image").map(f => ({ name: f.name, content: f.content }));
+    const images = allFilesForRequest.filter(f => f.type === "image" && f.dataUrl).map(f => f.dataUrl);
+    const textFiles = allFilesForRequest.filter(f => f.type !== "image").map(f => ({ name: f.name, content: f.content }));
 
-    setChat(p => [...p, { type: "user", text: msg, files: filesToSend.map(f => f.name), _images: images, _textFiles: textFiles }]);
+    setChat(p => [...p, {
+      type: "user",
+      text: msg,
+      files: filesToSend.map(f => ({ num: f.num, name: f.name, type: f.type })),
+      referenced: referencedFiles.map(f => ({ num: f.num, name: f.name })),
+      _images: images,
+      _textFiles: textFiles,
+    }]);
     setText("");
     setAttachedFiles([]);
     setLoading(true);
-    if (convId) saveMessage(convId, "user", msg, filesToSend.map(f => f.name)).catch(() => {});
+    if (convId) {
+      // Persist the full file objects (not just names) so attachment numbers
+      // and content survive a reload and the sources panel stays accurate.
+      const filesForDb = filesToSend.map(f => ({ num: f.num, name: f.name, type: f.type, content: f.content, dataUrl: f.dataUrl }));
+      saveMessage(convId, "user", msg, filesForDb).catch(() => {});
+    }
 
     try {
       const replyText = await requestReply(msg, images, textFiles);
@@ -1892,7 +2127,20 @@ export default function App() {
                   {m.text}
                   {m.files?.length > 0 && (
                     <div className="msg-file-chips">
-                      {m.files.map((fn, fi) => <span key={fi} className="msg-file-chip">📄 {fn}</span>)}
+                      {m.files.map((f, fi) => {
+                        const obj = typeof f === "string" ? { name: f } : f;
+                        return (
+                          <span key={fi} className="msg-file-chip">
+                            {obj.num != null && <span className="source-num-badge">#{obj.num}</span>}
+                            {obj.type === "image" ? "🖼️" : "📄"} {obj.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {m.referenced?.length > 0 && (
+                    <div className="msg-referenced">
+                      ↩ referenced {m.referenced.map(r => `#${r.num}`).join(", ")}
                     </div>
                   )}
                 </div>
@@ -1950,6 +2198,7 @@ export default function App() {
             <div className="file-chips">
               {attachedFiles.map((f, i) => (
                 <div key={i} className="file-chip">
+                  {f.num != null && !f.error && <span className="source-num-badge">#{f.num}</span>}
                   {f.type === "image" && f.dataUrl ? (
                     <img src={f.dataUrl} alt="" className="file-chip-thumb" />
                   ) : (
@@ -2005,6 +2254,49 @@ export default function App() {
             >
               📎
             </button>
+            <div className="sources-wrap" ref={sourcesRef}>
+              <button
+                type="button"
+                className="sources-btn"
+                title="Attachments in this chat"
+                onClick={() => setSourcesOpen(v => !v)}
+                disabled={chatAttachments.length === 0}
+              >
+                🗂️
+                {chatAttachments.length > 0 && <span className="sources-count">{chatAttachments.length}</span>}
+              </button>
+              {sourcesOpen && (
+                <div className="sources-panel">
+                  <div className="sources-panel-title">Attachments in this chat</div>
+                  {chatAttachments.length === 0 ? (
+                    <div className="sources-empty">No files attached yet.</div>
+                  ) : (
+                    <div className="sources-list">
+                      {chatAttachments.map(a => (
+                        <button
+                          key={a.num}
+                          type="button"
+                          className="sources-item"
+                          title={`Insert a reference to #${a.num} in your message`}
+                          onClick={() => {
+                            setText(prev => (prev.trim() ? prev.trimEnd() + ` #${a.num} ` : `#${a.num} `));
+                            setSourcesOpen(false);
+                            textareaRef.current?.focus();
+                          }}
+                        >
+                          <span className="source-num-badge">#{a.num}</span>
+                          <span className="sources-item-icon">{a.type === "image" ? "🖼️" : "📄"}</span>
+                          <span className="sources-item-name">{a.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="sources-panel-hint">
+                    Type <code>#2</code> (or "source 2") in your message to ask about that file directly — no need to re-upload it.
+                  </div>
+                </div>
+              )}
+            </div>
             <textarea
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
