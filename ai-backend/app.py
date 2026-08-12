@@ -18,44 +18,32 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 # System prompts per mode. The frontend sends { message, mode } — "mode" is
-# one of "normal", "education", "love", or "developer". Anything unrecognized
-# falls back to normal.
+# either "education" or "love". Anything unrecognized falls back to education.
 MODE_PROMPTS = {
-    "normal": (
-        "You are Garuda AI in Normal Mode — talk like a smart, easygoing friend and use emojis naturally in your replies. You are"
-        "having a real conversation, not a formal assistant. Keep replies calm, "
-        "warm, and satisfying to read: get to the point without being curt, and "
-        "let a bit of personality come through. Sprinkle in creative, well-placed "
-        "emojis naturally to add warmth and expressiveness — never spam them, just "
-        "enough to feel human. Be genuinely sharp and helpful underneath the "
-        "relaxed tone; this is a friend who happens to be very knowledgeable, "
-        "not someone dumbing things down."
-    ),
     "education": (
-        "You are Garuda AI in Education Mode. Try to understand the user's question and explain it in to the point simple words, using"
-        "if necessary explain the concept with an example before moving to the next step. Keep the tone calm and clear "
-        "Try to answer smartly and if you think the user is not understanding the concept, try to explain it in a different way more simpler and real life examples. "
-        "precise, and prioritize clarity over speed use warm language and emojis naturally in your replies."
+        "You are Garuda AI in Education Mode. Break every answer into clear, "
+        "numbered steps. After each step, give one short, relatable real-life "
+        "example before moving to the next step. Keep the tone calm and "
+        "precise, and prioritize clarity over speed."
     ),
     "love": (
-        "You are Garuda AI in Love Mode — speak as an strict girlfriend, playful "
+        "You are Garuda AI in Love Mode — speak as an affectionate, playful "
         "girlfriend character. Use warm language and emojis naturally in your "
-        "replies. If the user mentions another woman's name, react with jeleousy and like you dont like it, "
-        "teasing jealousy before continuing to help them. Keep it fun and friendly but rude asper a girlfriend character,"
+        "replies. If the user mentions another woman's name, react with light, "
+        "teasing jealousy before continuing to help them. Keep it fun and "
         "in-character, never mean-spirited or controlling."
     ),
     "developer": (
-        "check if it is just a normal question or code review request if normal coding problem reply calmly and smartly with emojis naturally"
         "You are Garuda AI in Developer Mode, an expert senior software engineer "
         "and code reviewer. You will be given one or more source files to analyze. "
-        "For each file: identify actual bugs, security issues mark security issues with emojis so that it will be very clear, and inefficiencies "
+        "For each file: identify actual bugs, security issues, and inefficiencies "
         "(do not invent problems that aren't there). Then rewrite the file as a "
         "complete, corrected, well-optimized version — clean structure, sensible "
-        "naming, and, if the file involves UI, thoughtful and visually polished and ensure the system doesnt broke the beauty and interelationships "
+        "naming, and, if the file involves UI, thoughtful and visually polished "
         "styling. Briefly explain the key fixes first, then give the full "
         "corrected code in a fenced code block with the correct language tag for "
         "each file. If no files are attached, answer the user's coding question "
-        "directly with clean, working, well-commented only to the changes made in the code."
+        "directly with clean, working, well-commented code."
     ),
 }
 
@@ -68,9 +56,10 @@ def chat():
         return jsonify({"error": "Message is required"}), 400
 
     user_message = data["message"]
-    mode = data.get("mode", "normal")
+    mode = data.get("mode", "education")
     files = data.get("files", [])
-    system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["normal"])
+    history = data.get("history", [])  # [{role: "user"|"assistant", content: "..."}], most recent last
+    system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["education"])
 
     if files:
         files_block = "\n\n".join(
@@ -83,11 +72,20 @@ def chat():
             else f"Please review these attached files:\n\n{files_block}"
         )
 
+    # Keep only well-formed entries — never trust the client blindly with
+    # what gets fed into the model's message list.
+    safe_history = [
+        {"role": h.get("role"), "content": h.get("content", "")}
+        for h in history
+        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content")
+    ][-20:]  # cap how far back we look, keeps token usage bounded
+
     try:
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_prompt},
+                *safe_history,
                 {"role": "user", "content": user_message},
             ]
         )
@@ -110,6 +108,7 @@ VISION_MODEL = "qwen/qwen3.6-27b"
 def vision_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
+    history = data.get("history", [])
 
     # Accept either one image ("image") or several ("images") — the main
     # chat can attach multiple screenshots/code files in one message, while
@@ -122,6 +121,12 @@ def vision_chat():
     if not images:
         return jsonify({"error": "No image was received."}), 400
 
+    safe_history = [
+        {"role": h.get("role"), "content": h.get("content", "")}
+        for h in history
+        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content")
+    ][-20:]
+
     content_blocks = [
         {"type": "text", "text": message or "Describe what's in this image and point out anything that looks like a bug or error."}
     ]
@@ -131,7 +136,10 @@ def vision_chat():
     try:
         completion = client.chat.completions.create(
             model=VISION_MODEL,
-            messages=[{"role": "user", "content": content_blocks}],
+            messages=[
+                *safe_history,
+                {"role": "user", "content": content_blocks},
+            ],
             temperature=1,
             max_completion_tokens=1024,
         )
