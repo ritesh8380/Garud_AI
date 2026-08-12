@@ -151,13 +151,18 @@ export default function DevCodeHelper({ t }) {
     setAsking(true);
 
     try {
+      const history = thread
+        .filter(m => m.text)
+        .slice(-20)
+        .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+
       let res;
       if (imageToSend) {
         const contextNote = selectedCount > 0 ? `This relates to the repo ${owner}/${repo} (${selectedCount} files loaded as context). ` : "";
         res = await fetch("https://garud-ai.onrender.com/vision-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: contextNote + q, image: imageToSend.dataUrl }),
+          body: JSON.stringify({ message: contextNote + q, image: imageToSend.dataUrl, history }),
         });
       } else {
         const fileList = Object.keys(selected).join("\n");
@@ -171,7 +176,7 @@ export default function DevCodeHelper({ t }) {
         res = await fetch("https://garud-ai.onrender.com/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: prompt }),
+          body: JSON.stringify({ message: prompt, history }),
         });
       }
       const data = await res.json();
