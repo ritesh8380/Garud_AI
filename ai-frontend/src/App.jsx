@@ -1011,6 +1011,7 @@ function buildCSS(t) {
       font-style: italic;
     }
     .md-inline-code {
+      display: inline;
       font-family: ui-monospace, Consolas, monospace;
       font-size: 0.88em;
       background: ${t.codeBg};
@@ -1062,6 +1063,7 @@ function buildCSS(t) {
       background: ${t.codeBg};
     }
     .md-code-block code {
+      display: block;
       font-family: ui-monospace, Consolas, monospace;
       font-size: 13px;
       line-height: 1.6;
