@@ -673,6 +673,21 @@ function buildCSS(t) {
       align-items: center;
       padding-top: 5px;
     }
+    .typing-stage-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 4px;
+    }
+    .typing-stage-text {
+      font-size: 13px;
+      color: ${t.subText};
+      animation: stageFade 0.3s ease both;
+    }
+    @keyframes stageFade {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: none; }
+    }
     .dot {
       width: 6px;
       height: 6px;
@@ -1844,6 +1859,7 @@ export default function App() {
   const [text, setText] = useState("");
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState("");
   const [isDark, setIsDark] = useState(false);
   const [showDev, setShowDev] = useState(false);
   const [devTab, setDevTab] = useState("profile");
@@ -2129,6 +2145,25 @@ export default function App() {
       saveMessage(convId, "user", msg, filesForDb).catch(() => {});
     }
 
+    // Purely cosmetic progress labels — there's no real streaming/progress
+    // signal from the backend, but stepping through a few honest-sounding
+    // stages makes the wait feel like something's actually happening instead
+    // of a silent spinner. Stops advancing once it reaches the last stage,
+    // rather than looping, so it doesn't say "reading attachment" again
+    // after it's clearly moved on.
+    const stages = images.length > 0
+      ? ["Reading image…", "Analyzing content…", "Thinking…", "Formatting reply…"]
+      : textFiles.length > 0
+      ? ["Reading attachment…", "Extracting text…", "Thinking…", "Formatting reply…"]
+      : ["Thinking…", "Formatting reply…"];
+    let stageIdx = 0;
+    setLoadingStage(stages[0]);
+    const stageTimer = setInterval(() => {
+      stageIdx = Math.min(stageIdx + 1, stages.length - 1);
+      setLoadingStage(stages[stageIdx]);
+      if (stageIdx === stages.length - 1) clearInterval(stageTimer);
+    }, 1100);
+
     try {
       const replyText = await requestReply(msg, images, textFiles);
       setChat(p => [...p, { type: "bot", text: replyText }]);
@@ -2147,6 +2182,8 @@ export default function App() {
         setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
       }
     } finally {
+      clearInterval(stageTimer);
+      setLoadingStage("");
       setLoading(false);
       abortControllerRef.current = null;
       setTimeout(() => textareaRef.current?.focus(), 50);
@@ -2514,8 +2551,11 @@ export default function App() {
           {loading && (
             <div className="typing-block">
               <div className="bot-avatar">🦅</div>
-              <div className="typing-dots">
-                <div className="dot"/><div className="dot"/><div className="dot"/>
+              <div className="typing-stage-wrap">
+                <span key={loadingStage} className="typing-stage-text">{loadingStage}</span>
+                <div className="typing-dots">
+                  <div className="dot"/><div className="dot"/><div className="dot"/>
+                </div>
               </div>
             </div>
           )}
