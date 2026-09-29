@@ -34,7 +34,7 @@ const LIGHT = {
   sendBtnDisabled: "#e5e5e5", avatarBot: "#ab68ff", hintText: "#d1d1d1",
   chipBg: "transparent", chipBorder: "#e5e5e5", chipHoverBg: "#f4f4f5",
   modalBg: "#f4f4f5", modalOverlay: "rgba(0,0,0,0.4)", scrollThumb: "#e5e5e5",
-  topbarBorder: "#f0f0f0", codeBg: "#f6f6f7", codeHeadBg: "#ececee",
+  topbarBorder: "#f0f0f0", codeBg: "#000000", codeHeadBg: "#ececee",
   tokKeyword: "#af00db", tokString: "#a31515", tokComment: "#008000",
   tokNumber: "#098658", tokFunc: "#795e26", tokPre: "#0000ff",
 };
