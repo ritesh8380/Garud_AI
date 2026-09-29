@@ -34,6 +34,7 @@ export default function DevCodeHelper({ t }) {
   const [question, setQuestion] = useState("");
   const [thread, setThread] = useState([]);
   const [asking, setAsking] = useState(false);
+  const [askingStage, setAskingStage] = useState("");
   const [attachedImage, setAttachedImage] = useState(null);
   const imageInputRef = useRef(null);
 
@@ -150,6 +151,17 @@ export default function DevCodeHelper({ t }) {
     setAttachedImage(null);
     setAsking(true);
 
+    const stages = imageToSend
+      ? ["Reading image…", "Analyzing content…", "Thinking…", "Formatting reply…"]
+      : ["Reading files…", "Cross-referencing code…", "Thinking…", "Formatting reply…"];
+    let stageIdx = 0;
+    setAskingStage(stages[0]);
+    const stageTimer = setInterval(() => {
+      stageIdx = Math.min(stageIdx + 1, stages.length - 1);
+      setAskingStage(stages[stageIdx]);
+      if (stageIdx === stages.length - 1) clearInterval(stageTimer);
+    }, 1100);
+
     try {
       const history = thread
         .filter(m => m.text)
@@ -184,6 +196,8 @@ export default function DevCodeHelper({ t }) {
     } catch {
       setThread(p => [...p, { role: "bot", text: "Could not reach the server. Please try again." }]);
     } finally {
+      clearInterval(stageTimer);
+      setAskingStage("");
       setAsking(false);
     }
   };
@@ -305,7 +319,7 @@ export default function DevCodeHelper({ t }) {
             ) : <FormattedMessage text={m.text} />}
           </div>
         ))}
-        {asking && <div className="dch-msg bot">Thinking…</div>}
+        {asking && <div className="dch-msg bot">{askingStage}</div>}
       </div>
 
       {attachedImage && (
