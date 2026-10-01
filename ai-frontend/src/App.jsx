@@ -562,6 +562,91 @@ function buildCSS(t) {
       display: flex;
       justify-content: flex-end;
     }
+    .user-pill-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      max-width: 100%;
+    }
+    .user-edit-toggle {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      border: 1px solid ${t.inputBorder};
+      background: transparent;
+      color: ${t.subText};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .user-pill-row:hover .user-edit-toggle {
+      opacity: 1;
+    }
+    .user-edit-toggle:hover {
+      background: ${t.inputBg};
+      color: ${t.text};
+    }
+    .user-edit-wrap {
+      width: 100%;
+      max-width: 72%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .user-edit-textarea {
+      width: 100%;
+      background: ${t.inputBg};
+      border: 1px solid ${t.inputHoverBorder};
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      color: ${t.text};
+      resize: none;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .user-edit-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .user-edit-btn {
+      height: 30px;
+      padding: 0 14px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid ${t.inputBorder};
+      transition: opacity 0.15s ease;
+    }
+    .user-edit-btn.cancel {
+      background: transparent;
+      color: ${t.subText};
+    }
+    .user-edit-btn.cancel:hover {
+      background: ${t.inputBg};
+      color: ${t.text};
+    }
+    .user-edit-btn.save {
+      background: linear-gradient(90deg,#ab68ff,#8b3cff);
+      color: #fff;
+      border: none;
+    }
+    .user-edit-btn.save:hover:not(:disabled) {
+      opacity: 0.88;
+    }
+    .user-edit-btn.save:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     .user-pill {
       max-width: 72%;
       background: ${t.userPillBg};
@@ -1761,6 +1846,13 @@ const SendIcon = () => (
   </svg>
 );
 
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
 const SpeakerIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
     <path d="M3 9v6h4l5 5V4L7 9H3z"/>
@@ -1863,6 +1955,8 @@ export default function App() {
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("");
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
   const [isDark, setIsDark] = useState(false);
   const [showDev, setShowDev] = useState(false);
   const [devTab, setDevTab] = useState("profile");
@@ -2097,9 +2191,37 @@ export default function App() {
     abortControllerRef.current?.abort();
   };
 
-  const send = async (msgOverride) => {
+  const startEdit = (i) => {
+    if (loading) return; // don't let an edit race an in-flight response
+    setEditingIndex(i);
+    setEditDraft(chat[i].text);
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditDraft("");
+  };
+
+  // Editing a message replaces it and everything after it, then resends —
+  // same as ChatGPT-style edit. Any images/files the original message had
+  // are carried over so you don't have to re-attach them.
+  const saveEdit = (i) => {
+    const newText = editDraft.trim();
+    if (!newText) return;
+    const original = chat[i];
+    const restoredFiles = [
+      ...(original._images || []).map((dataUrl, idx) => ({ name: `image-${idx + 1}`, type: "image", dataUrl })),
+      ...(original._textFiles || []).map(f => ({ name: f.name, type: "text", content: f.content })),
+    ];
+    setChat(prev => prev.slice(0, i));
+    setEditingIndex(null);
+    setEditDraft("");
+    send(newText, restoredFiles);
+  };
+
+  const send = async (msgOverride, filesOverride) => {
     const msg = (msgOverride || text).trim();
-    const filesToSend = attachedFiles;
+    const filesToSend = filesOverride || attachedFiles;
 
     // If the message points at earlier attachments by number (e.g. "#2" or
     // "source 3"), pull just those files back in from this chat's library
@@ -2492,27 +2614,54 @@ export default function App() {
           {chat.map((m, i) => (
             <div key={i} className={`msg-block ${m.type}`} style={{ animationDelay: `${Math.min(i, 4) * 0.03}s` }}>
               {m.type === "user" ? (
-                <div className="user-pill">
-                  {m.text}
-                  {m.files?.length > 0 && (
-                    <div className="msg-file-chips">
-                      {m.files.map((f, fi) => {
-                        const obj = typeof f === "string" ? { name: f } : f;
-                        return (
-                          <span key={fi} className="msg-file-chip">
-                            {obj.num != null && <span className="source-num-badge">#{obj.num}</span>}
-                            {obj.type === "image" ? "🖼️" : "📄"} {obj.name}
-                          </span>
-                        );
-                      })}
+                editingIndex === i ? (
+                  <div className="user-edit-wrap">
+                    <textarea
+                      className="user-edit-textarea"
+                      value={editDraft}
+                      onChange={e => setEditDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(i); }
+                        if (e.key === "Escape") cancelEdit();
+                      }}
+                      autoFocus
+                      rows={Math.min(10, Math.max(1, editDraft.split("\n").length))}
+                    />
+                    <div className="user-edit-actions">
+                      <button className="user-edit-btn cancel" onClick={cancelEdit} type="button">Cancel</button>
+                      <button className="user-edit-btn save" onClick={() => saveEdit(i)} type="button" disabled={!editDraft.trim()}>
+                        Save &amp; submit
+                      </button>
                     </div>
-                  )}
-                  {m.referenced?.length > 0 && (
-                    <div className="msg-referenced">
-                      ↩ referenced {m.referenced.map(r => `#${r.num}`).join(", ")}
+                  </div>
+                ) : (
+                  <div className="user-pill-row">
+                    <button className="user-edit-toggle" onClick={() => startEdit(i)} title="Edit message" type="button">
+                      <PencilIcon />
+                    </button>
+                    <div className="user-pill">
+                      {m.text}
+                      {m.files?.length > 0 && (
+                        <div className="msg-file-chips">
+                          {m.files.map((f, fi) => {
+                            const obj = typeof f === "string" ? { name: f } : f;
+                            return (
+                              <span key={fi} className="msg-file-chip">
+                                {obj.num != null && <span className="source-num-badge">#{obj.num}</span>}
+                                {obj.type === "image" ? "🖼️" : "📄"} {obj.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {m.referenced?.length > 0 && (
+                        <div className="msg-referenced">
+                          ↩ referenced {m.referenced.map(r => `#${r.num}`).join(", ")}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )
               ) : (
                 <>
                   <div className="bot-avatar">🦅</div>
