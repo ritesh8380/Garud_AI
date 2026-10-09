@@ -1915,7 +1915,7 @@ const CHIPS = ["Who are you?", "What can you help with?", "Tell me something int
 const MODES = [
   { id: "normal", label: "Normal Mode", icon: "😊", glow: "#f5b942" },
   { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
-  { id: "love", label: "Love Mode", icon: "😈", glow: "#c74fff" },
+  { id: "love", label: "Devil Mode", icon: "😈", glow: "#c74fff" },
   { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
 ];
 
