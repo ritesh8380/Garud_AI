@@ -12,6 +12,11 @@ import AuthScreen from "./Authscreen";
 import FormattedMessage from "./FormattedMessage";
 import Sidebar from "./Sidebar";
 import DevCodeHelper from "./DevCodeHelper";
+import normalModeIcon from "./assets/icons/normal_mode.png";
+import educationModeIcon from "./assets/icons/education_mode.png";
+import devilModeIcon from "./assets/icons/devil_mode.png";
+import developerModeIcon from "./assets/icons/developer_mode.png";
+import attachFileIcon from "./assets/icons/attach-file.png";
 
 const DARK = {
   bg: "#212121", text: "#ececec", subText: "#8e8ea0", dimText: "#4a4a5a",
@@ -1343,8 +1348,27 @@ function buildCSS(t) {
       box-shadow: 0 0 0 2px var(--glow), 0 0 14px var(--glow);
     }
     .mode-row-icon {
-      font-size: 19px;
-      line-height: 1;
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+      display: block;
+      user-select: none;
+    }
+    .mode-toggle-icon {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+    }
+    .attach-icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      display: block;
+      pointer-events: none;
+      user-select: none;
     }
     .mode-row-label {
       font-size: 10.5px;
@@ -1898,7 +1922,8 @@ function buildCSS(t) {
         padding: 8px 6px;
       }
       .mode-row-icon {
-        font-size: 17px;
+        width: 22px;
+        height: 22px;
       }
       .mode-row-label {
         font-size: 10px;
@@ -1995,10 +2020,10 @@ function stripMarkdownForSpeech(text) {
 const CHIPS = ["Who are you?", "What can you help with?", "Tell me something interesting", "Help me write something"];
 
 const MODES = [
-  { id: "normal", label: "Normal Mode", icon: "😊", glow: "#f5b942" },
-  { id: "education", label: "Education Mode", icon: "📘", glow: "#4f8cff" },
-  { id: "love", label: "Devil Mode", icon: "😈", glow: "#c74fff" },
-  { id: "developer", label: "Developer Mode", icon: "💻", glow: "#22c55e" },
+  { id: "normal", label: "Normal Mode", icon: normalModeIcon, glow: "#f5b942" },
+  { id: "education", label: "Education Mode", icon: educationModeIcon, glow: "#4f8cff" },
+  { id: "love", label: "Devil Mode", icon: devilModeIcon, glow: "#c74fff" },
+  { id: "developer", label: "Developer Mode", icon: developerModeIcon, glow: "#22c55e" },
 ];
 
 // Small emoji icon per file type, used on attachment cards that don't have
@@ -2969,7 +2994,7 @@ export default function App() {
                     style={{ "--glow": m.glow }}
                     onClick={() => { setMode(m.id); setModeMenuOpen(false); }}
                   >
-                    <span className="mode-row-icon">{m.icon}</span>
+                    <img className="mode-row-icon" src={m.icon} alt="" draggable={false} />
                     <span className="mode-row-label">{m.label}</span>
                   </button>
                 ))}
@@ -2982,8 +3007,14 @@ export default function App() {
                 style={{ "--glow": (MODES.find(m => m.id === mode) || MODES[0]).glow }}
                 onClick={() => setModeMenuOpen(v => !v)}
                 title={`Mode: ${(MODES.find(m => m.id === mode) || MODES[0]).label} — tap to switch`}
+                aria-label={`Mode: ${(MODES.find(m => m.id === mode) || MODES[0]).label}. Tap to switch`}
               >
-                {(MODES.find(m => m.id === mode) || MODES[0]).icon}
+                <img
+                  className="mode-toggle-icon"
+                  src={(MODES.find(m => m.id === mode) || MODES[0]).icon}
+                  alt=""
+                  draggable={false}
+                />
               </button>
             </div>
             <input
@@ -2998,9 +3029,10 @@ export default function App() {
               type="button"
               className="attach-btn"
               title="Attach files"
+              aria-label="Attach files"
               onClick={() => fileInputRef.current?.click()}
             >
-              📎
+              <img className="attach-icon" src={attachFileIcon} alt="" draggable={false} />
             </button>
             <button
               type="button"
