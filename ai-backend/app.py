@@ -174,6 +174,52 @@ def vision_chat():
         return jsonify({"error": "Couldn't process that image. Try a smaller file or a different format (JPG/PNG)."}), 500
 
 
+# Speech-to-text. The frontend records a short clip with the browser's
+# MediaRecorder and POSTs it here as multipart form data (field name "audio").
+# whisper-large-v3-turbo is Groq's fast, cheap, multilingual option — if you
+# ever need higher accuracy, swap in "whisper-large-v3".
+# Current list: https://console.groq.com/docs/speech-to-text
+TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
+MAX_AUDIO_BYTES = 24 * 1024 * 1024  # Groq's free tier caps uploads at 25MB
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    audio = request.files.get("audio")
+    if audio is None:
+        return jsonify({"error": "No audio was received."}), 400
+
+    audio_bytes = audio.read()
+    if len(audio_bytes) < 1000:
+        return jsonify({"error": "That recording was too short — hold the mic a bit longer."}), 400
+    if len(audio_bytes) > MAX_AUDIO_BYTES:
+        return jsonify({"error": "That recording is too large. Try a shorter one."}), 413
+
+    # The file extension tells Groq which audio format it's looking at
+    # (Chrome records .webm, Safari records .mp4). Fall back to webm.
+    filename = audio.filename or "recording.webm"
+
+    # Optional: the frontend can pass a language hint like "en" or "hi".
+    # Left empty, Whisper auto-detects the spoken language.
+    language = (request.form.get("language") or "").strip()
+
+    kwargs = {
+        "file": (filename, audio_bytes),
+        "model": TRANSCRIBE_MODEL,
+        "response_format": "json",
+        "temperature": 0.0,
+    }
+    if language:
+        kwargs["language"] = language
+
+    try:
+        result = client.audio.transcriptions.create(**kwargs)
+        return jsonify({"text": (result.text or "").strip()})
+    except Exception as e:
+        app.logger.error(f"transcribe error: {e}")
+        return jsonify({"error": "Couldn't transcribe that recording. Please try again."}), 500
+
+
 # IMPORTANT: For Render deployment
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))  # Render provides PORT
