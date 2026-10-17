@@ -1375,6 +1375,76 @@ function buildCSS(t) {
     .attach-btn:active {
       transform: translateY(0) scale(0.94);
     }
+    .mic-btn {
+      height: 34px;
+      min-width: 34px;
+      padding: 0 9px;
+      border-radius: 8px;
+      border: 1px solid ${t.inputBorder};
+      background: transparent;
+      color: ${t.subText};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-shrink: 0;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    }
+    .mic-btn:hover:not(:disabled) {
+      background: ${t.inputBg};
+      color: ${t.text};
+      transform: translateY(-1px);
+    }
+    .mic-btn:active:not(:disabled) {
+      transform: translateY(0) scale(0.94);
+    }
+    .mic-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .mic-btn.recording,
+    .mic-btn.recording:hover:not(:disabled) {
+      color: #ef4444;
+      border-color: #ef444466;
+      background: #ef444414;
+    }
+    .mic-rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: micPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 0 0 #ef444466; opacity: 1; }
+      50% { box-shadow: 0 0 0 5px #ef444400; opacity: 0.7; }
+    }
+    .mic-spinner {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid ${t.inputBorder};
+      border-top-color: #ab68ff;
+      animation: micSpin 0.7s linear infinite;
+    }
+    @keyframes micSpin {
+      to { transform: rotate(360deg); }
+    }
+    .mic-error {
+      font-size: 12px;
+      color: #ef4444;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      animation: mIn 0.25s ease both;
+    }
     .file-chips {
       display: flex;
       flex-wrap: wrap;
@@ -1728,7 +1798,7 @@ function buildCSS(t) {
 
     @media (prefers-reduced-motion: reduce) {
       .shell, .msg-block, .welcome, .welcome-eagle, .brand-icon, .modal, .modal-overlay,
-      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-toggle-btn, .mode-row, .mode-row-item {
+      .chip, .send-btn, .icon-btn, .dev-btn, .account-menu, .bot-avatar, .mode-toggle-btn, .mode-row, .mode-row-item, .mic-rec-dot {
         animation: none !important;
         transition: none !important;
       }
@@ -1819,6 +1889,10 @@ function buildCSS(t) {
         width: 32px;
         height: 32px;
       }
+      .mic-btn {
+        height: 32px;
+        min-width: 32px;
+      }
       .mode-row-item {
         min-width: 66px;
         padding: 8px 6px;
@@ -1858,6 +1932,14 @@ const SpeakerIcon = () => (
     <path d="M3 9v6h4l5 5V4L7 9H3z"/>
     <path d="M16.5 12c0-1.77-.77-3.29-2-4.24v8.48c1.23-.95 2-2.47 2-4.24z" opacity="0.9"/>
     <path d="M14.5 3.23v2.06c2.89 1.15 5 4.14 5 7.71s-2.11 6.56-5 7.71v2.06c4.01-1.24 7-5.06 7-9.77s-2.99-8.53-7-9.77z" opacity="0.6"/>
+  </svg>
+);
+
+const MicIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="12" rx="3"/>
+    <path d="M5 11a7 7 0 0 0 14 0"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
   </svg>
 );
 
@@ -1954,6 +2036,10 @@ export default function App() {
   const [text, setText] = useState("");
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [micError, setMicError] = useState("");
   const [loadingStage, setLoadingStage] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
   const [editDraft, setEditDraft] = useState("");
@@ -1986,6 +2072,11 @@ export default function App() {
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const attachNumRef = useRef(0);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const discardRecordingRef = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -2387,7 +2478,142 @@ export default function App() {
     }, 60);
   };
 
-  const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+  // ---- Voice input: record in the browser, transcribe on the backend ----
+  const MAX_RECORD_SECONDS = 120;
+
+  const pickRecorderMimeType = () => {
+    if (typeof MediaRecorder === "undefined") return "";
+    // Chrome/Edge/Firefox record webm or ogg, Safari records mp4 — all of
+    // which Groq's Whisper accepts.
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
+  };
+
+  const releaseMic = () => {
+    clearInterval(recordTimerRef.current);
+    recordTimerRef.current = null;
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+  };
+
+  const formatRecordTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const transcribeBlob = async (blob, mimeType) => {
+    setTranscribing(true);
+    try {
+      const ext = mimeType.includes("mp4") ? "mp4" : mimeType.includes("ogg") ? "ogg" : "webm";
+      const form = new FormData();
+      form.append("audio", blob, `recording.${ext}`);
+
+      let res;
+      try {
+        // No Content-Type header here on purpose — the browser has to set it
+        // itself so the multipart boundary is included.
+        res = await fetch("https://garud-ai.onrender.com/transcribe", {
+          method: "POST",
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+          body: form,
+        });
+      } catch {
+        setMicError("Couldn't reach the server. Please try again.");
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMicError(data.error || "Transcription failed. Please try again.");
+        return;
+      }
+      const spoken = (data.text || "").trim();
+      if (!spoken) {
+        setMicError("I couldn't hear anything — try again a bit closer to the mic.");
+        return;
+      }
+      // Drop the words into the box like typed text (after anything already
+      // there) so they can be fixed up before sending.
+      setText(prev => (prev.trim() ? `${prev.replace(/\s+$/, "")} ${spoken}` : spoken));
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+  };
+
+  const startRecording = async () => {
+    if (recording || transcribing || loading) return;
+    setMicError("");
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMicError("Voice input isn't supported in this browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mimeType = pickRecorderMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = [];
+      discardRecordingRef.current = false;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const type = recorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type });
+        chunksRef.current = [];
+        releaseMic();
+        setRecording(false);
+        if (discardRecordingRef.current) return;
+        transcribeBlob(blob, type);
+      };
+
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+
+      let elapsed = 0;
+      recordTimerRef.current = setInterval(() => {
+        elapsed += 1;
+        setRecordSeconds(elapsed);
+        if (elapsed >= MAX_RECORD_SECONDS) stopRecording(); // safety cap
+      }, 1000);
+    } catch (err) {
+      releaseMic();
+      if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
+        setMicError("Microphone access is blocked. Allow it in your browser's address bar, then try again.");
+      } else if (err?.name === "NotFoundError") {
+        setMicError("No microphone was found on this device.");
+      } else {
+        setMicError("Couldn't start the microphone.");
+      }
+    }
+  };
+
+  const toggleRecording = () => (recording ? stopRecording() : startRecording());
+
+  // Auto-hide the error banner, and make sure the mic is released if the
+  // component unmounts (e.g. sign-out) while recording.
+  useEffect(() => {
+    if (!micError) return;
+    const id = setTimeout(() => setMicError(""), 5000);
+    return () => clearTimeout(id);
+  }, [micError]);
+
+  useEffect(() => () => {
+    discardRecordingRef.current = true;
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    releaseMic();
+  }, []);
+
+  const voiceBusy = recording || transcribing;
+
+  const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!voiceBusy) send(); } };
   const hasText = text.trim().length > 0 || attachedFiles.length > 0;
   const handleSignOut = async () => {
     setShowAccount(false);
@@ -2731,6 +2957,7 @@ export default function App() {
               ))}
             </div>
           )}
+          {micError && <div className="mic-error" role="alert">{micError}</div>}
           <div className="input-box" ref={modeRef}>
             {modeMenuOpen && (
               <div className="mode-row">
@@ -2789,13 +3016,36 @@ export default function App() {
               ref={textareaRef} rows={1} value={text}
               onChange={e => setText(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={mode === "developer" ? "Paste code or attach files to review…" : "Message Garuda AI"}
+              placeholder={
+                recording ? "Listening… tap the mic again when you're done"
+                : transcribing ? "Turning your voice into text…"
+                : mode === "developer" ? "Paste code or attach files to review…" : "Message Garuda AI"
+              }
               disabled={loading} autoFocus
             />
             <button
+              type="button"
+              className={`mic-btn ${recording ? "recording" : ""}`}
+              onClick={toggleRecording}
+              disabled={loading || transcribing}
+              title={recording ? "Stop recording" : transcribing ? "Transcribing…" : "Speak your message"}
+              aria-label={recording ? "Stop recording" : "Speak your message"}
+            >
+              {transcribing ? (
+                <span className="mic-spinner" />
+              ) : recording ? (
+                <>
+                  <span className="mic-rec-dot" />
+                  <span>{formatRecordTime(recordSeconds)}</span>
+                </>
+              ) : (
+                <MicIcon />
+              )}
+            </button>
+            <button
               className={`send-btn ${loading ? "stop-mode" : ""}`}
               onClick={() => (loading ? stopGenerating() : send())}
-              disabled={!loading && !hasText}
+              disabled={!loading && (!hasText || voiceBusy)}
               title={loading ? "Stop generating" : "Send"}
             >
               {loading ? <StopSquareIcon /> : <SendIcon />}
