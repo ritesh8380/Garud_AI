@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 
 import groq
 from dotenv import load_dotenv
@@ -41,6 +42,17 @@ CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "openai/gpt-oss-120b")
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
 MAX_IMAGES = 3  # Groq limit per request for this model
 MAX_IMAGE_CHARS = 15 * 1024 * 1024  # per image (base64 data URL length)
+SHRINK_ABOVE_CHARS = 3_500_000  # bigger images are downscaled if Pillow is installed
+MAX_IMAGE_SIDE = 1600  # px, longest side after downscaling
+
+# Qwen 3.8 on Groq can "think" before answering, which eats the token budget.
+# "none" = instruct mode (fast, answer only). Set GROQ_VISION_REASONING="" to
+# omit the parameter entirely, or "low"/"medium"/"high" to let it think.
+VISION_REASONING = os.getenv("GROQ_VISION_REASONING", "none")
+
+# Set DEBUG_ERRORS=1 on Render to append Groq's real error text to the message
+# the frontend shows. Turn it off again once things work.
+DEBUG_ERRORS = os.getenv("DEBUG_ERRORS", "").strip().lower() in ("1", "true", "yes")
 
 TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
 MAX_AUDIO_BYTES = 24 * 1024 * 1024  # Groq's free tier caps uploads at 25MB
@@ -146,19 +158,59 @@ def clean_history(raw):
     return cleaned[-MAX_HISTORY_MESSAGES:]
 
 
-def is_valid_image(url):
-    if not isinstance(url, str):
-        return False
-    if url.startswith("data:image/") and ";base64," in url[:100]:
-        return len(url) <= MAX_IMAGE_CHARS
-    return url.startswith("https://") and len(url) <= 2048
+def image_problem(i, url):
+    """Return a human-readable reason this image is unusable, or None if it's fine."""
+    if not isinstance(url, str) or not url:
+        return f"Image {i} is empty or not a string."
+    if url.startswith("data:"):
+        if not url.startswith("data:image/") or ";base64," not in url[:100]:
+            return f"Image {i} isn't a valid base64 image data URL. Use JPG or PNG."
+        if len(url) > MAX_IMAGE_CHARS:
+            return f"Image {i} is too large (about {len(url) / 1e6:.1f}MB). Please use a smaller image."
+        return None
+    if url.startswith("https://") and len(url) <= 2048:
+        return None
+    return f"Image {i} must be a base64 data URL (data:image/...) or an https link."
+
+
+def shrink_image(data_url):
+    """Downscale a large base64 image to a JPEG data URL.
+
+    Needs Pillow; if it's missing or anything goes wrong, the original is
+    returned untouched so this can never make things worse.
+    """
+    if not data_url.startswith("data:image/") or len(data_url) <= SHRINK_ABOVE_CHARS:
+        return data_url
+    try:
+        import base64
+        import io
+
+        from PIL import Image
+    except ImportError:
+        app.logger.info("Pillow not installed - sending large image as-is.")
+        return data_url
+    try:
+        raw = base64.b64decode(data_url.split(",", 1)[1])
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+        img = img.convert("RGB")
+        img.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=85, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception as e:  # noqa: BLE001 - fall back to the original image
+        app.logger.warning("shrink_image failed: %r", e)
+        return data_url
 
 
 def extract_reply(response):
     """Return (text, finish_reason). `content` can be None for reasoning models."""
     choice = response.choices[0]
-    text = (choice.message.content or "").strip()
-    return text, choice.finish_reason
+    text = choice.message.content or ""
+    # Qwen can put its reasoning inside <think>...</think> in the content.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"^.*?</think>", "", text, flags=re.DOTALL)  # opening tag missing
+    return text.strip(), choice.finish_reason
 
 
 def _groq_exc(name):
@@ -175,14 +227,19 @@ def groq_error_response(err, feature):
         s in text for s in ("model_not_found", "decommissioned", "does not exist")
     )
     if model_gone:
-        return jsonify({"error": "This feature's AI model is currently unavailable. Please try again later."}), 502
-    if isinstance(err, _groq_exc("RateLimitError")):
-        return jsonify({"error": "Too many requests right now. Please wait a moment and try again."}), 429
-    if isinstance(err, _groq_exc("BadRequestError")):
-        return jsonify({"error": "The request was rejected. If you attached images, they may be too large or in an unsupported format (use JPG/PNG)."}), 400
-    if isinstance(err, _groq_exc("APIConnectionError")):
-        return jsonify({"error": "Couldn't reach the AI service. Please try again."}), 503
-    return jsonify({"error": "Something went wrong. Please try again."}), 500
+        msg, status = "This feature's AI model is currently unavailable. Please try again later.", 502
+    elif isinstance(err, _groq_exc("RateLimitError")):
+        msg, status = "Too many requests right now. Please wait a moment and try again.", 429
+    elif isinstance(err, _groq_exc("BadRequestError")):
+        msg, status = "The request was rejected. If you attached images, they may be too large or in an unsupported format (use JPG/PNG).", 400
+    elif isinstance(err, _groq_exc("APIConnectionError")):
+        msg, status = "Couldn't reach the AI service. Please try again.", 503
+    else:
+        msg, status = "Something went wrong. Please try again.", 500
+
+    if DEBUG_ERRORS:
+        msg += f" [debug: {type(err).__name__}: {str(err)[:500]}]"
+    return jsonify({"error": msg}), status
 
 
 @app.errorhandler(413)
@@ -282,8 +339,15 @@ def vision_chat():
         return jsonify({"error": "No image was received."}), 400
     if len(images) > MAX_IMAGES:
         return jsonify({"error": f"You can attach at most {MAX_IMAGES} images at a time."}), 400
-    if not all(is_valid_image(img) for img in images):
-        return jsonify({"error": "One of the images is invalid or too large. Use JPG/PNG under ~10MB."}), 400
+    for i, img in enumerate(images, 1):
+        problem = image_problem(i, img)
+        if problem:
+            return jsonify({"error": problem}), 400
+    images = [shrink_image(img) for img in images]
+    app.logger.info(
+        "vision-chat: %d image(s), sizes=%s chars, model=%s",
+        len(images), [len(img) for img in images], VISION_MODEL,
+    )
 
     mode = data.get("mode", "education")
     system_prompt = MODE_PROMPTS.get(mode, EDUCATION_PROMPT) + IMAGE_NOTE
@@ -292,6 +356,11 @@ def vision_chat():
     content_blocks = [{"type": "text", "text": message or DEFAULT_VISION_QUESTION}]
     for img in images:
         content_blocks.append({"type": "image_url", "image_url": {"url": img}})
+
+    request_kwargs = {}
+    if VISION_REASONING:
+        # extra_body works on any SDK version, even before it knows this field.
+        request_kwargs["extra_body"] = {"reasoning_effort": VISION_REASONING}
 
     try:
         completion = client.chat.completions.create(
@@ -303,6 +372,7 @@ def vision_chat():
             ],
             temperature=0.7,
             max_completion_tokens=VISION_MAX_TOKENS,
+            **request_kwargs,
         )
         reply, finish = extract_reply(completion)
         if not reply:
