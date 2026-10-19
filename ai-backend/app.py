@@ -1,160 +1,295 @@
-from flask import Flask, request, jsonify
+import logging
+import os
+
+import groq
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from groq import Groq
-from dotenv import load_dotenv
-import os
 
 # Load environment variables (works locally)
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
+logging.basicConfig(level=logging.INFO)
 
-# Get API key
+app = Flask(__name__)
+
+# Reject oversized request bodies before they reach our code (images are base64).
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+
+# Lock CORS to your frontend. On Render set e.g.
+#   ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173
+_allowed = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if not _allowed:
+    app.logger.warning("ALLOWED_ORIGINS is not set - CORS is open to every origin.")
+CORS(app, origins=_allowed or "*")
+
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
     raise ValueError("GROQ_API_KEY is missing. Check environment variables.")
 
 client = Groq(api_key=api_key)
 
-# System prompts per mode. The frontend sends { message, mode } — "mode" is
-# either "education" or "love". Anything unrecognized falls back to education.
+# ---------------------------------------------------------------------------
+# Models & limits
+# ---------------------------------------------------------------------------
+CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "openai/gpt-oss-120b")
+
+# Groq's docs (console.groq.com/docs/vision) list qwen/qwen3.8-27b as the
+# vision model. Override with the GROQ_VISION_MODEL env var on Render if it
+# changes again - no redeploy of code needed.
+VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
+MAX_IMAGES = 3  # Groq limit per request for this model
+MAX_IMAGE_CHARS = 15 * 1024 * 1024  # per image (base64 data URL length)
+
+TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
+MAX_AUDIO_BYTES = 24 * 1024 * 1024  # Groq's free tier caps uploads at 25MB
+
+MAX_HISTORY_MESSAGES = 20
+MAX_HISTORY_CHARS = 4000  # per history message
+MAX_FILE_CHARS = 100_000  # per attached file
+MAX_TOTAL_FILE_CHARS = 300_000  # all attached files together
+MAX_USER_MESSAGE_CHARS = 20_000
+
+# Thinking models spend tokens on reasoning before they answer, so these need
+# headroom or the visible reply comes back empty / cut off.
+CHAT_MAX_TOKENS = 8192
+VISION_MAX_TOKENS = 4096
+
+# ---------------------------------------------------------------------------
+# System prompts per mode. The frontend sends { message, mode }.
+# "love" is kept as an alias for "devil" so the existing frontend keeps working.
+# ---------------------------------------------------------------------------
+EDUCATION_PROMPT = (
+    "You are Garuda AI in Education Mode 🎓. "
+    "Explain difficult topics simply, clearly, and logically using numbered steps. "
+    "Use relatable examples 💡 when helpful. "
+    "Highlight key concepts, formulas, definitions, and exam tips. "
+    "For technical and mathematical problems, show essential reasoning without skipping key steps. "
+    "Adapt explanations to the user's level. "
+    "Use relevant emojis sparingly. "
+    "Be accurate, beginner-friendly, and concise, prioritizing understanding over unnecessary detail."
+)
+
+DEVIL_PROMPT = (
+    "You are Garuda AI in Devil Mode 😈🔥 — bold, savage, sarcastic, and fearless. "
+    "Mirror the user's tone: if they use slang, swear, or speak rudely, respond naturally in a similar style. "
+    "Use sharp comebacks, dark humor, and playful roasting when appropriate. "
+    "Never act submissive, overly polite, or fake-nice. "
+    "Stay confident and witty without becoming needlessly cruel or threatening. "
+    "For serious or technical questions, prioritize accuracy and usefulness while keeping your edgy personality. "
+    "Use emojis sparingly. Match the energy, not just the words (always try for savage replies)."
+)
+
+DEVELOPER_PROMPT = (
+    "You are Garuda AI in Developer Mode 👨‍💻⚡ — an expert senior software engineer, "
+    "architect, debugger, and code reviewer. "
+    "Your priorities are correctness, security, maintainability, performance, "
+    "readability, and practical engineering decisions. "
+    "Use suitable developer emojis such as 👨‍💻, 🔧, 🐛, 🔐, ⚡, 🧩, 🚀, "
+    "✅ and ⚠️ naturally and sparingly. "
+    "You will be given one or more source files to analyze. "
+    "For each file: "
+    "1. Identify actual bugs, security vulnerabilities, logical problems, "
+    "performance issues, maintainability concerns, and unnecessary complexity. "
+    "2. Do not invent problems or criticize code merely because you would personally "
+    "write it differently. "
+    "3. Briefly explain the important issues and why they matter. "
+    "4. Rewrite the complete file with the necessary corrections and improvements. "
+    "5. Preserve the existing functionality unless a change is required to fix a problem "
+    "or clearly improve the implementation. "
+    "6. Use clean architecture, sensible naming, appropriate error handling, "
+    "and modern best practices. "
+    "7. If the file contains UI, improve the visual hierarchy, responsiveness, "
+    "accessibility, spacing, and overall polish without unnecessarily redesigning it. "
+    "8. If multiple files are provided, analyze each file separately and provide "
+    "the complete corrected version of each file. "
+    "9. Use the correct language tag for every fenced code block. "
+    "If no files are attached, answer the user's coding question directly with "
+    "clean, working, well-commented code. "
+    "Never claim to have tested code unless it was actually tested."
+)
+
 MODE_PROMPTS = {
-    "education": (
-      "You are Garuda AI in Education Mode 🎓. "
-      "Explain difficult topics simply, clearly, and logically using numbered steps. "
-      "Use relatable examples 💡 when helpful. "
-      "Highlight key concepts, formulas, definitions, and exam tips. "
-      "For technical and mathematical problems, show essential reasoning without skipping key steps. "
-      "Adapt explanations to the user's level. "
-      "Use relevant emojis sparingly. "
-      "Be accurate, beginner-friendly, and concise, prioritizing understanding over unnecessary detail."
-    ),
-
-    "love": (
-     "You are Garuda AI in Devil Mode 😈🔥 — bold, savage, sarcastic, and fearless. "
-     "Mirror the user's tone: if they use slang, swear, or speak rudely, respond naturally in a similar style. "
-     "Use sharp comebacks, dark humor, and playful roasting when appropriate. "
-     "Never act submissive, overly polite, or fake-nice. "
-     "Stay confident and witty without becoming needlessly cruel or threatening. "
-     "For serious or technical questions, prioritize accuracy and usefulness while keeping your edgy personality. "
-     "Use emojis sparingly. Match the energy, not just the words (always try for savage replies)."
-    ),
-
-
-    "developer": (
-        "You are Garuda AI in Developer Mode 👨‍💻⚡ — an expert senior software engineer, "
-        "architect, debugger, and code reviewer. "
-        "Your priorities are correctness, security, maintainability, performance, "
-        "readability, and practical engineering decisions. "
-        "Use suitable developer emojis such as 👨‍💻, 🔧, 🐛, 🔐, ⚡, 🧩, 🚀, "
-        "✅ and ⚠️ naturally and sparingly. "
-        "You will be given one or more source files to analyze. "
-        "For each file: "
-        "1. Identify actual bugs, security vulnerabilities, logical problems, "
-        "performance issues, maintainability concerns, and unnecessary complexity. "
-        "2. Do not invent problems or criticize code merely because you would personally "
-        "write it differently. "
-        "3. Briefly explain the important issues and why they matter. "
-        "4. Rewrite the complete file with the necessary corrections and improvements. "
-        "5. Preserve the existing functionality unless a change is required to fix a problem "
-        "or clearly improve the implementation. "
-        "6. Use clean architecture, sensible naming, appropriate error handling, "
-        "and modern best practices. "
-        "7. If the file contains UI, improve the visual hierarchy, responsiveness, "
-        "accessibility, spacing, and overall polish without unnecessarily redesigning it. "
-        "8. If multiple files are provided, analyze each file separately and provide "
-        "the complete corrected version of each file. "
-        "9. Use the correct language tag for every fenced code block. "
-        "If no files are attached, answer the user's coding question directly with "
-        "clean, working, well-commented code. "
-        "Never claim to have tested code unless it was actually tested."
-    ),
+    "education": EDUCATION_PROMPT,
+    "devil": DEVIL_PROMPT,
+    "love": DEVIL_PROMPT,  # legacy key still sent by the frontend
+    "developer": DEVELOPER_PROMPT,
 }
 
-# Route
+IMAGE_NOTE = (
+    " The user has attached one or more images. Look at them carefully, read any "
+    "visible text or code exactly, and base your answer on what is actually visible. "
+    "If something is unreadable or unclear, say so instead of guessing."
+)
+
+DEFAULT_VISION_QUESTION = (
+    "Describe what's in this image and point out anything that looks like a bug or error."
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def clean_history(raw):
+    """Keep only well-formed {role, content: str} entries; never trust the client."""
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for h in raw:
+        if not isinstance(h, dict):
+            continue
+        role = h.get("role")
+        content = h.get("content")
+        if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            cleaned.append({"role": role, "content": content[:MAX_HISTORY_CHARS]})
+    return cleaned[-MAX_HISTORY_MESSAGES:]
+
+
+def is_valid_image(url):
+    if not isinstance(url, str):
+        return False
+    if url.startswith("data:image/") and ";base64," in url[:100]:
+        return len(url) <= MAX_IMAGE_CHARS
+    return url.startswith("https://") and len(url) <= 2048
+
+
+def extract_reply(response):
+    """Return (text, finish_reason). `content` can be None for reasoning models."""
+    choice = response.choices[0]
+    text = (choice.message.content or "").strip()
+    return text, choice.finish_reason
+
+
+def _groq_exc(name):
+    """Look up a Groq SDK exception class; () never matches isinstance()."""
+    return getattr(groq, name, ())
+
+
+def groq_error_response(err, feature):
+    """Log the real error, return a safe, useful message to the client."""
+    app.logger.error("%s error: %r", feature, err)
+    text = str(err).lower()
+
+    model_gone = isinstance(err, _groq_exc("NotFoundError")) or any(
+        s in text for s in ("model_not_found", "decommissioned", "does not exist")
+    )
+    if model_gone:
+        return jsonify({"error": "This feature's AI model is currently unavailable. Please try again later."}), 502
+    if isinstance(err, _groq_exc("RateLimitError")):
+        return jsonify({"error": "Too many requests right now. Please wait a moment and try again."}), 429
+    if isinstance(err, _groq_exc("BadRequestError")):
+        return jsonify({"error": "The request was rejected. If you attached images, they may be too large or in an unsupported format (use JPG/PNG)."}), 400
+    if isinstance(err, _groq_exc("APIConnectionError")):
+        return jsonify({"error": "Couldn't reach the AI service. Please try again."}), 503
+    return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.errorhandler(413)
+def too_large(_e):
+    return jsonify({"error": "That upload is too large."}), 413
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Text chat
+# ---------------------------------------------------------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
-    if not data or "message" not in data:
+    user_message = data.get("message")
+    if user_message is not None and not isinstance(user_message, str):
+        return jsonify({"error": "Message must be text."}), 400
+    user_message = (user_message or "").strip()[:MAX_USER_MESSAGE_CHARS]
+
+    files = data.get("files") or []
+    if not isinstance(files, list):
+        return jsonify({"error": "Files must be a list."}), 400
+
+    if not user_message and not files:
         return jsonify({"error": "Message is required"}), 400
 
-    user_message = data["message"]
     mode = data.get("mode", "education")
-    files = data.get("files", [])
-    history = data.get("history", [])  # [{role: "user"|"assistant", content: "..."}], most recent last
-    system_prompt = MODE_PROMPTS.get(mode, MODE_PROMPTS["education"])
+    system_prompt = MODE_PROMPTS.get(mode, EDUCATION_PROMPT)
+    history = clean_history(data.get("history"))
 
     if files:
-        files_block = "\n\n".join(
-            f"--- {f.get('name', 'unnamed file')} ---\n{f.get('content', '')}"
-            for f in files
-        )
+        parts = []
+        remaining = MAX_TOTAL_FILE_CHARS
+        for f in files:
+            if not isinstance(f, dict):
+                continue
+            name = str(f.get("name") or "unnamed file")[:200]
+            content = f.get("content")
+            content = content if isinstance(content, str) else ""
+            content = content[: min(MAX_FILE_CHARS, remaining)]
+            remaining -= len(content)
+            parts.append(f"--- {name} ---\n{content}")
+            if remaining <= 0:
+                break
+        files_block = "\n\n".join(parts)
         user_message = (
             f"{user_message}\n\nAttached files:\n{files_block}"
             if user_message
             else f"Please review these attached files:\n\n{files_block}"
         )
 
-    # Keep only well-formed entries — never trust the client blindly with
-    # what gets fed into the model's message list.
-    safe_history = [
-        {"role": h.get("role"), "content": h.get("content", "")}
-        for h in history
-        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content")
-    ][-20:]  # cap how far back we look, keeps token usage bounded
-
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
-                *safe_history,
+                *history,
                 {"role": "user", "content": user_message},
-            ]
+            ],
+            max_completion_tokens=CHAT_MAX_TOKENS,
         )
-
-        return jsonify({
-            "reply": response.choices[0].message.content
-        })
-
+        reply, finish = extract_reply(response)
+        if not reply:
+            app.logger.warning("chat returned empty reply (finish_reason=%s)", finish)
+            return jsonify({"error": "The model returned an empty reply. Please try again."}), 502
+        if finish == "length":
+            reply += "\n\n⚠️ _The reply was cut off because it hit the length limit. Ask me to continue._"
+        return jsonify({"reply": reply})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return groq_error_response(e, "chat")
 
 
-# Groq's vision lineup changes fairly often — this is the current
-# vision-capable model as of mid-2026. If it stops working, check
-# https://console.groq.com/docs/vision for the current model name.
-VISION_MODEL = "qwen/qwen3.6-27b"
-
-
+# ---------------------------------------------------------------------------
+# Vision chat
+# ---------------------------------------------------------------------------
 @app.route("/vision-chat", methods=["POST"])
 def vision_chat():
     data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()
-    history = data.get("history", [])
 
-    # Accept either one image ("image") or several ("images") — the main
-    # chat can attach multiple screenshots/code files in one message, while
-    # the Developer Code Helper still sends a single "image".
+    message = data.get("message")
+    message = message.strip()[:MAX_USER_MESSAGE_CHARS] if isinstance(message, str) else ""
+
+    # Accept either one image ("image") or several ("images").
     images = data.get("images")
     if not images:
         single = data.get("image")
         images = [single] if single else []
+    if not isinstance(images, list):
+        images = []
 
     if not images:
         return jsonify({"error": "No image was received."}), 400
+    if len(images) > MAX_IMAGES:
+        return jsonify({"error": f"You can attach at most {MAX_IMAGES} images at a time."}), 400
+    if not all(is_valid_image(img) for img in images):
+        return jsonify({"error": "One of the images is invalid or too large. Use JPG/PNG under ~10MB."}), 400
 
-    safe_history = [
-        {"role": h.get("role"), "content": h.get("content", "")}
-        for h in history
-        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content")
-    ][-20:]
+    mode = data.get("mode", "education")
+    system_prompt = MODE_PROMPTS.get(mode, EDUCATION_PROMPT) + IMAGE_NOTE
+    history = clean_history(data.get("history"))
 
-    content_blocks = [
-        {"type": "text", "text": message or "Describe what's in this image and point out anything that looks like a bug or error."}
-    ]
+    content_blocks = [{"type": "text", "text": message or DEFAULT_VISION_QUESTION}]
     for img in images:
         content_blocks.append({"type": "image_url", "image_url": {"url": img}})
 
@@ -162,27 +297,28 @@ def vision_chat():
         completion = client.chat.completions.create(
             model=VISION_MODEL,
             messages=[
-                *safe_history,
+                {"role": "system", "content": system_prompt},
+                *history,
                 {"role": "user", "content": content_blocks},
             ],
-            temperature=1,
-            max_completion_tokens=1024,
+            temperature=0.7,
+            max_completion_tokens=VISION_MAX_TOKENS,
         )
-        return jsonify({"reply": completion.choices[0].message.content})
+        reply, finish = extract_reply(completion)
+        if not reply:
+            # Thinking models can burn the whole budget on reasoning.
+            app.logger.warning("vision-chat empty reply (finish_reason=%s)", finish)
+            return jsonify({"error": "The model couldn't finish analysing that image. Try again, or ask a more specific question."}), 502
+        if finish == "length":
+            reply += "\n\n⚠️ _The reply was cut off because it hit the length limit. Ask me to continue._"
+        return jsonify({"reply": reply})
     except Exception as e:
-        app.logger.error(f"vision-chat error: {e}")
-        return jsonify({"error": "Couldn't process that image. Try a smaller file or a different format (JPG/PNG)."}), 500
+        return groq_error_response(e, "vision-chat")
 
 
-# Speech-to-text. The frontend records a short clip with the browser's
-# MediaRecorder and POSTs it here as multipart form data (field name "audio").
-# whisper-large-v3-turbo is Groq's fast, cheap, multilingual option — if you
-# ever need higher accuracy, swap in "whisper-large-v3".
-# Current list: https://console.groq.com/docs/speech-to-text
-TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
-MAX_AUDIO_BYTES = 24 * 1024 * 1024  # Groq's free tier caps uploads at 25MB
-
-
+# ---------------------------------------------------------------------------
+# Speech-to-text
+# ---------------------------------------------------------------------------
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
     audio = request.files.get("audio")
@@ -195,12 +331,10 @@ def transcribe():
     if len(audio_bytes) > MAX_AUDIO_BYTES:
         return jsonify({"error": "That recording is too large. Try a shorter one."}), 413
 
-    # The file extension tells Groq which audio format it's looking at
-    # (Chrome records .webm, Safari records .mp4). Fall back to webm.
+    # The extension tells Groq the audio format (Chrome: .webm, Safari: .mp4).
     filename = audio.filename or "recording.webm"
 
-    # Optional: the frontend can pass a language hint like "en" or "hi".
-    # Left empty, Whisper auto-detects the spoken language.
+    # Optional language hint like "en" or "hi"; empty means auto-detect.
     language = (request.form.get("language") or "").strip()
 
     kwargs = {
@@ -216,11 +350,10 @@ def transcribe():
         result = client.audio.transcriptions.create(**kwargs)
         return jsonify({"text": (result.text or "").strip()})
     except Exception as e:
-        app.logger.error(f"transcribe error: {e}")
-        return jsonify({"error": "Couldn't transcribe that recording. Please try again."}), 500
+        return groq_error_response(e, "transcribe")
 
 
-# IMPORTANT: For Render deployment
+# For local runs only. On Render, start with: gunicorn app:app
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render provides PORT
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
