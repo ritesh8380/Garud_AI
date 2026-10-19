@@ -2943,7 +2943,7 @@ export default function App() {
                         disabled={loading}
                       >
                         <RegenerateIcon />
-                      </button>
+               k       </button>
                     </div>
                   </div>
                 </>
@@ -2953,7 +2953,7 @@ export default function App() {
 
           {loading && (
             <div className="typing-block">
-              <div className="bot-avatar">🦅</div>
+              <div className="bot-avatar">🦅2</div>
               <div className="typing-stage-wrap">
                 <span key={loadingStage} className="typing-stage-text">{loadingStage}</span>
                 <div className="typing-dots">
