@@ -73,6 +73,31 @@ MODE_PROMPTS = {
 }
 
 # Route
+# Groq retires preview models every couple of months. When that happens every
+# request to that model fails with a 404 "model_not_found" — so say that plainly
+# instead of a vague "something went wrong". Set CHAT_MODEL / VISION_MODEL in
+# Render's Environment tab to switch models without touching the code.
+# Current models and shutdown dates: https://console.groq.com/docs/deprecations
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "openai/gpt-oss-120b")
+VISION_MODEL = os.environ.get("VISION_MODEL", "qwen/qwen3.8-27b")
+
+
+def describe_groq_error(e, model, fallback):
+    """Turn a Groq API failure into (http_status, message the user can act on)."""
+    status = getattr(e, "status_code", None)
+    text = str(e).lower()
+    if status == 404 or "model_not_found" in text or "decommissioned" in text or "does not exist" in text:
+        return 500, (f"The AI model '{model}' is no longer available on Groq. "
+                     "The server's model setting needs updating (see console.groq.com/docs/deprecations).")
+    if status == 429 or "rate limit" in text:
+        return 429, "The AI service is busy or rate-limited right now. Please try again in a moment."
+    if status == 413 or "too large" in text:
+        return 413, "That request is too large for the AI service. Try a smaller image or file."
+    if status in (401, 403):
+        return 500, "The server couldn't sign in to Groq. Check the GROQ_API_KEY setting on the server."
+    return 500, fallback
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -107,7 +132,7 @@ def chat():
 
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 *safe_history,
@@ -120,13 +145,9 @@ def chat():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# Groq's vision lineup changes fairly often — this is the current
-# vision-capable model as of mid-2026. If it stops working, check
-# https://console.groq.com/docs/vision for the current model name.
-VISION_MODEL = "qwen/qwen3.6-27b"
+        app.logger.error(f"chat error ({CHAT_MODEL}): {e}")
+        code, msg = describe_groq_error(e, CHAT_MODEL, "The AI service returned an error. Please try again.")
+        return jsonify({"error": msg}), code
 
 
 @app.route("/vision-chat", methods=["POST"])
@@ -165,13 +186,23 @@ def vision_chat():
                 *safe_history,
                 {"role": "user", "content": content_blocks},
             ],
-            temperature=1,
+            temperature=0.7,
             max_completion_tokens=1024,
+            # Qwen 3.8 "thinks" before answering by default, which is slow and
+            # can use up the token budget before any answer appears. "none"
+            # switches to direct (instruct) mode — right for describing a photo.
+            # Passed via extra_body so it works on any version of the groq SDK.
+            extra_body={"reasoning_effort": "none"},
         )
-        return jsonify({"reply": completion.choices[0].message.content})
+        reply = (completion.choices[0].message.content or "").strip()
+        return jsonify({"reply": reply or "I couldn't produce a description for that image."})
     except Exception as e:
-        app.logger.error(f"vision-chat error: {e}")
-        return jsonify({"error": "Couldn't process that image. Try a smaller file or a different format (JPG/PNG)."}), 500
+        app.logger.error(f"vision-chat error ({VISION_MODEL}): {e}")
+        code, msg = describe_groq_error(
+            e, VISION_MODEL,
+            "Couldn't process that image. Try a smaller file or a different format (JPG/PNG).",
+        )
+        return jsonify({"error": msg}), code
 
 
 # Speech-to-text. The frontend records a short clip with the browser's
@@ -179,7 +210,7 @@ def vision_chat():
 # whisper-large-v3-turbo is Groq's fast, cheap, multilingual option — if you
 # ever need higher accuracy, swap in "whisper-large-v3".
 # Current list: https://console.groq.com/docs/speech-to-text
-TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
+TRANSCRIBE_MODEL = os.environ.get("TRANSCRIBE_MODEL", "whisper-large-v3-turbo")
 MAX_AUDIO_BYTES = 24 * 1024 * 1024  # Groq's free tier caps uploads at 25MB
 
 
@@ -216,8 +247,9 @@ def transcribe():
         result = client.audio.transcriptions.create(**kwargs)
         return jsonify({"text": (result.text or "").strip()})
     except Exception as e:
-        app.logger.error(f"transcribe error: {e}")
-        return jsonify({"error": "Couldn't transcribe that recording. Please try again."}), 500
+        app.logger.error(f"transcribe error ({TRANSCRIBE_MODEL}): {e}")
+        code, msg = describe_groq_error(e, TRANSCRIBE_MODEL, "Couldn't transcribe that recording. Please try again.")
+        return jsonify({"error": msg}), code
 
 
 # IMPORTANT: For Render deployment
