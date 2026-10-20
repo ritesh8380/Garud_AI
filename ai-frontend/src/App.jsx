@@ -2298,10 +2298,26 @@ export default function App() {
         signal: controller.signal,
       });
     }
-    if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+    if (!res.ok) {
+      // The server answered, but with an error. Keep what it said — it now
+      // explains the real cause (e.g. "the AI model is no longer available").
+      let detail = "";
+      try { detail = (await res.json()).error || ""; } catch { /* body wasn't JSON */ }
+      const err = new Error(detail || `The server returned an error (${res.status}).`);
+      err.status = res.status;
+      throw err;
+    }
     const data = await res.json();
     return data.reply ?? "Sorry, I didn't get a valid response.";
   };
+
+  // "Couldn't connect at all" and "connected, but the server hit an error" are
+  // different problems. Lumping both into "could not reach the server" hid the
+  // real cause whenever the backend answered with an error.
+  const replyErrorText = (err) =>
+    err && err.status
+      ? `⚠️ ${String(err.message).slice(0, 300)}`
+      : "Could not reach the server. Please try again.";
 
   const stopGenerating = () => {
     abortControllerRef.current?.abort();
@@ -2420,7 +2436,7 @@ export default function App() {
       if (err.name === "AbortError") {
         setChat(p => [...p, { type: "bot", text: "⏹ Generation stopped." }]);
       } else {
-        setChat(p => [...p, { type: "bot", text: "Could not reach the server. Please try again." }]);
+        setChat(p => [...p, { type: "bot", text: replyErrorText(err) }]);
       }
     } finally {
       clearInterval(stageTimer);
@@ -2452,7 +2468,7 @@ export default function App() {
       if (err.name !== "AbortError") {
         setChat(p => {
           const next = [...p];
-          next[botIndex] = { type: "bot", text: "Could not reach the server. Please try again." };
+          next[botIndex] = { type: "bot", text: replyErrorText(err) };
           return next;
         });
       }
@@ -2943,7 +2959,7 @@ export default function App() {
                         disabled={loading}
                       >
                         <RegenerateIcon />
-               k       </button>
+                      </button>
                     </div>
                   </div>
                 </>
@@ -2953,7 +2969,7 @@ export default function App() {
 
           {loading && (
             <div className="typing-block">
-              <div className="bot-avatar">🦅2</div>
+              <div className="bot-avatar">🦅</div>
               <div className="typing-stage-wrap">
                 <span key={loadingStage} className="typing-stage-text">{loadingStage}</span>
                 <div className="typing-dots">
